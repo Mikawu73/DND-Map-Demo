@@ -1,0 +1,88 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barovia Map</title>
+  <link rel="stylesheet" href="assets/styles/main.css">
+  <script src="assets/scripts/main.js" defer></script>
+</head>
+<body>
+  <main class="page">
+    <header class="hero">
+      <p class="eyebrow">Curse of Strahd</p>
+      <h1>Barovia</h1>
+      <p class="intro">
+        A first pass at the player-facing site: the full regional map, centered and readable.
+      </p>
+    </header>
+
+    <section class="map-shell" aria-labelledby="map-title">
+      <div class="map-frame">
+        <div class="map-frame__topbar">
+          <h2 id="map-title">Map of Barovia</h2>
+          <button
+            type="button"
+            id="marker-toggle"
+            class="marker-toggle"
+            aria-pressed="true"
+          >
+            Hide Markers
+          </button>
+        </div>
+        <div class="map-stage">
+          <img
+            src="assets/images/Map%20-%20Barovia.jpg"
+            alt="Illustrated map of Barovia"
+            class="barovia-map"
+          >
+          <button
+            type="button"
+            class="map-marker"
+            style="left: 92.81%; top: 52.9%;"
+            data-location-id="gates-of-barovia-east"
+            data-location-name="巴洛维亚大门"
+            data-location-src="content/locations/gates-of-barovia-east.html"
+            aria-controls="location-panel"
+            aria-label="Open details for the Eastern Gates of Barovia"
+          ></button>
+          <button
+            type="button"
+            class="map-marker"
+            style="left: 91.78%; top: 57.3%;"
+            data-location-id="roadside-corpse"
+            data-location-name="路边的死尸"
+            data-location-src="content/locations/roadside-corpse.html"
+            aria-controls="location-panel"
+            aria-label="Open details for 路边的死尸"
+          ></button>
+          <button
+            type="button"
+            class="map-marker"
+            style="left: 90.44%; top: 56.3%;"
+            data-location-id="fortunetellers-tent"
+            data-location-name="占卜师的帐篷"
+            data-location-src="content/locations/fortunetellers-tent.html"
+            aria-controls="location-panel"
+            aria-label="Open details for 占卜师的帐篷"
+          ></button>
+        </div>
+      </div>
+    </section>
+
+    <section
+      id="location-panel"
+      class="location-panel"
+      aria-live="polite"
+      aria-labelledby="location-title"
+      hidden
+    >
+      <div class="location-panel__header">
+        <p class="location-panel__eyebrow">Selected Location</p>
+        <h2 id="location-title">Eastern Gates of Barovia</h2>
+      </div>
+      <div id="location-panel-body" class="location-panel__body"></div>
+    </section>
+  </main>
+</body>
+</html>
