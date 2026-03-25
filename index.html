@@ -26,11 +26,29 @@
             id="marker-toggle"
             class="marker-toggle"
             aria-pressed="true"
-            hidden
           >
             Hide Markers
           </button>
         </div>
+
+        <section class="map-legend" aria-labelledby="map-legend-title">
+          <p class="map-legend__title" id="map-legend-title">Legend</p>
+          <div class="map-legend__items">
+            <div class="map-legend__item">
+              <span class="map-legend__swatch map-legend__swatch--location" aria-hidden="true"></span>
+              <span>Location</span>
+            </div>
+            <div class="map-legend__item">
+              <span class="map-legend__swatch map-legend__swatch--information" aria-hidden="true"></span>
+              <span>Information</span>
+            </div>
+            <div class="map-legend__item">
+              <span class="map-legend__swatch map-legend__swatch--npc" aria-hidden="true"></span>
+              <span>NPC</span>
+            </div>
+          </div>
+        </section>
+
         <div class="map-stage" id="map-stage">
           <img
             src="assets/images/Map%20-%20Barovia.jpg"
@@ -39,31 +57,34 @@
           >
           <button
             type="button"
-            class="map-marker"
+            class="map-marker map-marker--location"
             style="left: 92.81%; top: 52.9%;"
             data-location-id="gates-of-barovia-east"
             data-location-name="巴洛维亚大门"
             data-location-src="content/locations/gates-of-barovia-east.html"
+            data-location-type="location"
             aria-controls="location-panel"
             aria-label="Open details for the Eastern Gates of Barovia"
           ></button>
           <button
             type="button"
-            class="map-marker"
+            class="map-marker map-marker--information"
             style="left: 91.78%; top: 57.3%;"
             data-location-id="roadside-corpse"
             data-location-name="路边的死尸"
             data-location-src="content/locations/roadside-corpse.html"
+            data-location-type="information"
             aria-controls="location-panel"
             aria-label="Open details for 路边的死尸"
           ></button>
           <button
             type="button"
-            class="map-marker"
+            class="map-marker map-marker--npc"
             style="left: 90.44%; top: 56.3%;"
             data-location-id="fortunetellers-tent"
             data-location-name="占卜师的帐篷"
             data-location-src="content/locations/fortunetellers-tent.html"
+            data-location-type="npc"
             aria-controls="location-panel"
             aria-label="Open details for 占卜师的帐篷"
           ></button>

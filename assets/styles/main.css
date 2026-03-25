@@ -174,6 +174,69 @@ body {
   outline-offset: 3px;
 }
 
+.map-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(89, 72, 59, 0.2);
+  background: rgba(255, 251, 243, 0.64);
+}
+
+.map-legend__title {
+  margin: 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.map-legend__items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.map-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.map-legend__swatch {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #fff7de;
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px rgba(20, 14, 9, 0.12);
+  background: #8f2d23;
+}
+
+.map-legend__swatch--location,
+.map-marker.map-marker--location {
+  background: #8f2d23;
+  border-radius: 999px;
+  clip-path: none;
+}
+
+.map-legend__swatch--information,
+.map-marker.map-marker--information {
+  background: #2d5b7a;
+  border-radius: 999px;
+  clip-path: none;
+}
+
+.map-legend__swatch--npc,
+.map-marker.map-marker--npc {
+  background: #78611e;
+  border-radius: 999px;
+  clip-path: none;
+}
+
 .map-stage {
   position: relative;
 }
@@ -194,11 +257,22 @@ body {
   height: 28px;
   border: 3px solid #fff7de;
   border-radius: 999px;
-  background: #a01f1f;
+  background: #8f2d23;
   box-shadow:
-    0 0 0 6px rgba(160, 31, 31, 0.25),
+    0 0 0 6px rgba(143, 45, 35, 0.25),
     0 8px 16px rgba(0, 0, 0, 0.28);
   cursor: pointer;
+}
+
+.map-marker.map-marker--location {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #fff7de;
+  background: #8f2d23;
+  box-shadow:
+    0 0 0 6px rgba(143, 45, 35, 0.25),
+    0 8px 16px rgba(0, 0, 0, 0.28);
+  transform: translate(-50%, -50%);
 }
 
 .map-stage--markers-hidden .map-marker {
@@ -224,7 +298,7 @@ body {
 .map-marker:hover,
 .map-marker:focus-visible {
   box-shadow:
-    0 0 0 9px rgba(160, 31, 31, 0.3),
+    0 0 0 9px rgba(20, 14, 9, 0.24),
     0 10px 20px rgba(0, 0, 0, 0.32);
 }
 
@@ -402,6 +476,11 @@ body {
   .map-shell {
     padding: 12px;
     border-radius: 18px;
+  }
+
+  .map-legend {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .portal-grid {

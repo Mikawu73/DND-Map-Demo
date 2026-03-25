@@ -7,8 +7,6 @@ const mapStage = document.getElementById("map-stage");
 const dmControls = document.getElementById("dm-controls");
 const dmMarkerList = document.getElementById("dm-marker-list");
 const viewIntro = document.getElementById("view-intro");
-const playerViewLink = document.getElementById("player-view-link");
-const dmViewLink = document.getElementById("dm-view-link");
 const contentCache = new Map();
 
 const VISIBILITY_STORAGE_KEY = "barovia-marker-visibility";
@@ -87,6 +85,17 @@ function syncDmControl(marker) {
     ?.classList.toggle("dm-marker-item--hidden", !revealed);
 }
 
+function formatMarkerType(type) {
+  switch (type) {
+    case "information":
+      return "Information";
+    case "npc":
+      return "NPC";
+    default:
+      return "Location";
+  }
+}
+
 function renderDmControls() {
   if (viewMode !== "dm" || !dmControls || !dmMarkerList) {
     return;
@@ -108,7 +117,8 @@ function renderDmControls() {
 
     const meta = document.createElement("p");
     meta.className = "dm-marker-item__meta";
-    meta.textContent = marker.dataset.locationId || "";
+    const markerType = marker.dataset.locationType || "location";
+    meta.textContent = `${formatMarkerType(markerType)} - ${marker.dataset.locationId || ""}`;
 
     const toggle = document.createElement("button");
     toggle.type = "button";
@@ -128,8 +138,6 @@ function renderDmControls() {
 
 function applyViewMode() {
   document.body.dataset.view = viewMode;
-  playerViewLink?.classList.toggle("view-switcher__link--active", viewMode === "player");
-  dmViewLink?.classList.toggle("view-switcher__link--active", viewMode === "dm");
 
   if (viewIntro) {
     viewIntro.textContent =
@@ -139,7 +147,7 @@ function applyViewMode() {
   }
 
   if (markerToggle) {
-    markerToggle.hidden = viewMode !== "dm";
+    markerToggle.hidden = false;
   }
 }
 
