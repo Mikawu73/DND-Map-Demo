@@ -1,19 +1,19 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Barovia Map</title>
+  <title>Barovia Map Player View</title>
   <link rel="stylesheet" href="assets/styles/main.css">
   <script src="assets/scripts/main.js" defer></script>
 </head>
-<body>
+<body data-view="player">
   <main class="page">
     <header class="hero">
       <p class="eyebrow">Curse of Strahd</p>
       <h1>Barovia</h1>
-      <p class="intro">
-        A first pass at the player-facing site: the full regional map, centered and readable.
+      <p class="intro" id="view-intro">
+        Player view: only the locations revealed by the DM are visible.
       </p>
     </header>
 
@@ -26,11 +26,12 @@
             id="marker-toggle"
             class="marker-toggle"
             aria-pressed="true"
+            hidden
           >
             Hide Markers
           </button>
         </div>
-        <div class="map-stage">
+        <div class="map-stage" id="map-stage">
           <img
             src="assets/images/Map%20-%20Barovia.jpg"
             alt="Illustrated map of Barovia"
@@ -68,6 +69,22 @@
           ></button>
         </div>
       </div>
+    </section>
+
+    <section
+      id="dm-controls"
+      class="dm-panel"
+      aria-labelledby="dm-controls-title"
+      hidden
+    >
+      <div class="dm-panel__header">
+        <p class="location-panel__eyebrow">Dungeon Master</p>
+        <h2 id="dm-controls-title">Marker Visibility</h2>
+      </div>
+      <p class="dm-panel__intro">
+        Choose which locations are revealed to players. These settings are stored in this browser.
+      </p>
+      <div id="dm-marker-list" class="dm-marker-list"></div>
     </section>
 
     <section

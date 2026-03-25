@@ -55,12 +55,81 @@ body {
   color: var(--muted);
 }
 
+.view-switcher {
+  display: inline-flex;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(45, 22, 15, 0.1);
+}
+
+.view-switcher__link {
+  padding: 10px 16px;
+  border-radius: 999px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 0.95rem;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.view-switcher__link:hover,
+.view-switcher__link:focus-visible {
+  background: rgba(45, 22, 15, 0.12);
+}
+
+.view-switcher__link--active {
+  color: #fff7de;
+  background: #2d160f;
+}
+
 .map-shell {
   border: 1px solid rgba(64, 48, 35, 0.35);
   border-radius: 24px;
   padding: 18px;
   background: var(--panel);
   box-shadow: 0 18px 40px var(--shadow);
+}
+
+.portal-shell {
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.portal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.portal-card {
+  display: block;
+  padding: 24px;
+  border-radius: 20px;
+  border: 1px solid rgba(89, 72, 59, 0.22);
+  background: rgba(255, 251, 243, 0.75);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 14px 30px rgba(20, 14, 9, 0.08);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.portal-card:hover,
+.portal-card:focus-visible {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 34px rgba(20, 14, 9, 0.14);
+}
+
+.portal-card h2 {
+  margin: 0 0 10px;
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  color: var(--ink);
+}
+
+.portal-card p:last-child {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
 }
 
 .map-frame {
@@ -144,6 +213,14 @@ body {
   background: #fff7de;
 }
 
+.map-marker--dm-hidden {
+  opacity: 0.42;
+  background: #5d5249;
+  box-shadow:
+    0 0 0 6px rgba(93, 82, 73, 0.18),
+    0 8px 16px rgba(0, 0, 0, 0.22);
+}
+
 .map-marker:hover,
 .map-marker:focus-visible {
   box-shadow:
@@ -152,6 +229,89 @@ body {
 }
 
 .map-marker:focus-visible {
+  outline: 2px solid #2d160f;
+  outline-offset: 3px;
+}
+
+.dm-panel {
+  margin-top: 22px;
+  border: 1px solid rgba(64, 48, 35, 0.35);
+  border-radius: 24px;
+  padding: 22px;
+  background: rgba(251, 245, 234, 0.92);
+  box-shadow: 0 18px 40px var(--shadow);
+}
+
+.dm-panel__header {
+  margin-bottom: 8px;
+}
+
+.dm-panel__intro {
+  margin: 0 0 18px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.dm-marker-list {
+  display: grid;
+  gap: 12px;
+}
+
+.dm-marker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(89, 72, 59, 0.22);
+  background: rgba(255, 251, 243, 0.75);
+}
+
+.dm-marker-item--hidden {
+  opacity: 0.78;
+}
+
+.dm-marker-item__label {
+  min-width: 0;
+}
+
+.dm-marker-item__title,
+.dm-marker-item__meta {
+  margin: 0;
+}
+
+.dm-marker-item__title {
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.dm-marker-item__meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+}
+
+.dm-marker-item__toggle {
+  flex-shrink: 0;
+  min-width: 176px;
+  padding: 10px 14px;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  color: #fff7de;
+  background: #5d5249;
+  border: 1px solid rgba(93, 82, 73, 0.9);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.dm-marker-item__toggle[aria-pressed="true"] {
+  background: #a01f1f;
+  border-color: rgba(160, 31, 31, 0.9);
+}
+
+.dm-marker-item__toggle:focus-visible {
   outline: 2px solid #2d160f;
   outline-offset: 3px;
 }
@@ -244,6 +404,20 @@ body {
     border-radius: 18px;
   }
 
+  .portal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .view-switcher {
+    display: flex;
+    width: 100%;
+  }
+
+  .view-switcher__link {
+    flex: 1;
+    text-align: center;
+  }
+
   .barovia-map {
     border-width: 6px;
     border-radius: 10px;
@@ -261,6 +435,21 @@ body {
   .location-panel {
     padding: 16px;
     border-radius: 18px;
+  }
+
+  .dm-panel {
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .dm-marker-item {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dm-marker-item__toggle {
+    width: 100%;
+    min-width: 0;
   }
 
   .location-panel__body {
