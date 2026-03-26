@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -21,102 +21,68 @@
       <div class="map-frame">
         <div class="map-frame__topbar">
           <h2 id="map-title">Map of Barovia</h2>
-          <button
-            type="button"
-            id="marker-toggle"
-            class="marker-toggle"
-            aria-pressed="true"
-          >
-            Hide Markers
-          </button>
+          <div class="map-frame__actions">
+            <button type="button" id="map-return" class="map-return" hidden>Return to Barovia</button>
+            <button type="button" id="marker-toggle" class="marker-toggle" aria-pressed="true">Hide Markers</button>
+          </div>
         </div>
 
         <section class="map-legend" aria-labelledby="map-legend-title">
           <p class="map-legend__title" id="map-legend-title">Legend</p>
           <div class="map-legend__items">
-            <div class="map-legend__item">
-              <span class="map-legend__swatch map-legend__swatch--location" aria-hidden="true"></span>
-              <span>Location</span>
-            </div>
-            <div class="map-legend__item">
-              <span class="map-legend__swatch map-legend__swatch--information" aria-hidden="true"></span>
-              <span>Information</span>
-            </div>
-            <div class="map-legend__item">
-              <span class="map-legend__swatch map-legend__swatch--npc" aria-hidden="true"></span>
-              <span>NPC</span>
-            </div>
+            <div class="map-legend__item"><span class="map-legend__swatch map-legend__swatch--location" aria-hidden="true"></span><span>Location</span></div>
+            <div class="map-legend__item"><span class="map-legend__swatch map-legend__swatch--information" aria-hidden="true"></span><span>Information</span></div>
+            <div class="map-legend__item"><span class="map-legend__swatch map-legend__swatch--portrait" aria-hidden="true"></span><span>Portrait</span></div>
           </div>
         </section>
 
-        <div class="map-stage" id="map-stage">
-          <img
-            src="assets/images/Map%20-%20Barovia.jpg"
-            alt="Illustrated map of Barovia"
-            class="barovia-map"
-          >
-          <button
-            type="button"
-            class="map-marker map-marker--location"
-            style="left: 92.81%; top: 52.9%;"
-            data-location-id="gates-of-barovia-east"
-            data-location-name="巴洛维亚大门"
-            data-location-src="content/locations/gates-of-barovia-east.html"
-            data-location-type="location"
-            aria-controls="location-panel"
-            aria-label="Open details for the Eastern Gates of Barovia"
-          ></button>
-          <button
-            type="button"
-            class="map-marker map-marker--information"
-            style="left: 91.78%; top: 57.3%;"
-            data-location-id="roadside-corpse"
-            data-location-name="路边的死尸"
-            data-location-src="content/locations/roadside-corpse.html"
-            data-location-type="information"
-            aria-controls="location-panel"
-            aria-label="Open details for 路边的死尸"
-          ></button>
-          <button
-            type="button"
-            class="map-marker map-marker--npc"
-            style="left: 90.44%; top: 56.3%;"
-            data-location-id="fortunetellers-tent"
-            data-location-name="占卜师的帐篷"
-            data-location-src="content/locations/fortunetellers-tent.html"
-            data-location-type="npc"
-            aria-controls="location-panel"
-            aria-label="Open details for 占卜师的帐篷"
-          ></button>
+        <div class="map-layout">
+          <div class="map-stage" id="map-stage">
+            <img src="assets/images/Map%20-%20Barovia.jpg" alt="Illustrated map of Barovia" class="barovia-map" id="barovia-map">
+            <button type="button" class="map-marker map-marker--location" style="left: 92.81%; top: 52.9%;" data-map-id="barovia" data-location-id="gates-of-barovia-east" data-location-name="巴洛维亚大门" data-location-src="content/locations/gates-of-barovia-east.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for the Eastern Gates of Barovia"></button>
+            <button type="button" class="map-marker map-marker--information" style="left: 91.78%; top: 57.3%;" data-map-id="barovia" data-location-id="roadside-corpse" data-location-name="路边的死尸" data-location-src="content/locations/roadside-corpse.html" data-location-type="information" aria-controls="location-panel" aria-label="Open details for 路边的死尸"></button>
+            <button type="button" class="map-marker map-marker--location" style="left: 90.44%; top: 56.3%;" data-map-id="barovia" data-location-id="fortunetellers-tent" data-location-name="占卜师的帐篷" data-location-src="content/locations/fortunetellers-tent.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 占卜师的帐篷"></button>
+            <button type="button" class="map-marker map-marker--location" style="left: 78.95%; top: 61.6%;" data-map-id="barovia" data-location-id="village-of-barovia" data-location-name="巴洛维亚村" data-location-type="location" data-map-src="assets/images/Map%20-%20Village%20of%20Barovia.jpg" data-map-alt="Map of the Village of Barovia" data-target-map-id="village-of-barovia" data-target-map-title="Village of Barovia" aria-label="Show the Village of Barovia map"></button>
+            <button type="button" class="map-marker map-marker--location" style="left: 48.57%; top: 61.33%;" data-map-id="village-of-barovia" data-location-id="bildraths-mercantile" data-location-name="比尔德拉斯商行" data-location-src="content/locations/bildraths-mercantile.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 比尔德拉斯商行"></button>
+            <button type="button" class="map-marker map-marker--location" style="left: 49.42%; top: 48.42%;" data-map-id="village-of-barovia" data-location-id="blood-on-the-vine-tavern" data-location-name="葡萄藤之血酒馆" data-location-src="content/locations/blood-on-the-vine-tavern.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 葡萄藤之血酒馆"></button>
+            <button type="button" class="map-marker map-marker--location" style="left: 44.02%; top: 66.67%;" data-map-id="village-of-barovia" data-location-id="mad-marys-townhouse" data-location-name="疯玛丽的连排屋" data-location-src="content/locations/mad-marys-townhouse.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 疯玛丽的连排屋"></button>
+            <button type="button" class="map-marker map-marker--location" style="left: 41.59%; top: 89.00%;" data-map-id="village-of-barovia" data-location-id="burgomasters-mansion" data-location-name="村长宅邸" data-location-src="content/locations/burgomasters-mansion.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 村长宅邸"></button>
+            <button type="button" class="map-marker map-marker--location" style="left: 34.81%; top: 56.00%;" data-map-id="village-of-barovia" data-location-id="dream-pastries" data-location-name="梦幻糕饼" data-location-src="content/locations/dream-pastries.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 梦幻糕饼"></button>
+            <button type="button" class="map-marker map-marker--location" style="left: 26.88%; top: 29.58%;" data-map-id="village-of-barovia" data-location-id="church" data-location-name="教堂" data-location-src="content/locations/church.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 教堂"></button>
+          </div>
+
+          <aside id="portrait-rail" class="portrait-rail" aria-label="Character portraits" hidden>
+            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="donavich-portrait" data-location-name="Donavich" data-location-type="portrait" data-image-src="assets/images/Donavich.jpg" data-image-alt="Portrait of Donavich" aria-controls="location-panel" aria-label="Show portrait of Donavich"><img src="assets/images/Donavich.jpg" alt="Donavich"><span>Donavich</span></button>
+            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="doru-portrait" data-location-name="Doru" data-location-type="portrait" data-image-src="assets/images/Doru.jpg" data-image-alt="Portrait of Doru" aria-controls="location-panel" aria-label="Show portrait of Doru"><img src="assets/images/Doru.jpg" alt="Doru"><span>Doru</span></button>
+            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="ireena-kolyana-portrait" data-location-name="Ireena Kolyana" data-location-type="portrait" data-image-src="assets/images/Ireena%20Kolyana.jpg" data-image-alt="Portrait of Ireena Kolyana" aria-controls="location-panel" aria-label="Show portrait of Ireena Kolyana"><img src="assets/images/Ireena%20Kolyana.jpg" alt="Ireena Kolyana"><span>Ireena Kolyana</span></button>
+            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="ismark-the-lesser-portrait" data-location-name="Ismark-the-Lesser" data-location-type="portrait" data-image-src="assets/images/Ismark-the-Lesser.jpg" data-image-alt="Portrait of Ismark-the-Lesser" aria-controls="location-panel" aria-label="Show portrait of Ismark-the-Lesser"><img src="assets/images/Ismark-the-Lesser.jpg" alt="Ismark-the-Lesser"><span>Ismark-the-Lesser</span></button>
+            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="mad-mary-portrait" data-location-name="Mad Mary" data-location-type="portrait" data-image-src="assets/images/Mad%20Mary.jpg" data-image-alt="Portrait of Mad Mary" aria-controls="location-panel" aria-label="Show portrait of Mad Mary"><img src="assets/images/Mad%20Mary.jpg" alt="Mad Mary"><span>Mad Mary</span></button>
+          </aside>
         </div>
       </div>
     </section>
 
-    <section
-      id="dm-controls"
-      class="dm-panel"
-      aria-labelledby="dm-controls-title"
-      hidden
-    >
+    <section id="dm-controls" class="dm-panel" aria-labelledby="dm-controls-title" hidden>
       <div class="dm-panel__header">
         <p class="location-panel__eyebrow">Dungeon Master</p>
         <h2 id="dm-controls-title">Marker Visibility</h2>
       </div>
-      <p class="dm-panel__intro">
-        Choose which locations are revealed to players. These settings are stored in this browser.
-      </p>
-      <div id="dm-marker-list" class="dm-marker-list"></div>
+      <p class="dm-panel__intro">Choose which locations and portraits are revealed to players. These settings are stored in this browser.</p>
+      <div class="dm-marker-groups">
+        <section class="dm-marker-group" aria-labelledby="dm-map-markers-title">
+          <h3 id="dm-map-markers-title" class="dm-marker-group__title">Map Markers</h3>
+          <div id="dm-location-list" class="dm-marker-list"></div>
+        </section>
+        <section class="dm-marker-group" aria-labelledby="dm-portrait-markers-title">
+          <h3 id="dm-portrait-markers-title" class="dm-marker-group__title">Portrait Markers</h3>
+          <div id="dm-portrait-list" class="dm-marker-list"></div>
+        </section>
+      </div>
     </section>
 
-    <section
-      id="location-panel"
-      class="location-panel"
-      aria-live="polite"
-      aria-labelledby="location-title"
-      hidden
-    >
+    <section id="location-panel" class="location-panel" aria-live="polite" aria-labelledby="location-title" hidden>
       <div class="location-panel__header">
-        <p class="location-panel__eyebrow">Selected Location</p>
+        <p id="location-eyebrow" class="location-panel__eyebrow">Selected Location</p>
         <h2 id="location-title">Eastern Gates of Barovia</h2>
       </div>
       <div id="location-panel-body" class="location-panel__body"></div>
@@ -124,3 +90,7 @@
   </main>
 </body>
 </html>
+
+
+
+
