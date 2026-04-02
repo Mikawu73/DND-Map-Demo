@@ -18,7 +18,7 @@ const mapTitle = document.getElementById("map-title");
 const VISIBILITY_STORAGE_KEY = "barovia-marker-visibility";
 const VISIBILITY_STORAGE_VERSION_KEY = "barovia-marker-visibility-version";
 const VISIBILITY_STORAGE_VERSION = 2;
-const SOCKET_RETRY_MS = 1500;
+const FIREBASE_PATH = "maps/barovia/markerVisibility";
 const ROOT_MAP = {
   id: "barovia",
   src: "assets/images/Map%20-%20Barovia.jpg",
@@ -51,8 +51,8 @@ const DEFAULT_REVEALED_MARKERS = {
 const markerVisibility = loadMarkerVisibility();
 const mapHistory = [{ ...ROOT_MAP }];
 let currentMap = { ...ROOT_MAP };
-let syncSocket = null;
-let syncRetryId = 0;
+let databaseRef = null;
+let firebaseReady = false;
 
 function loadMarkerVisibility() {
   try {
@@ -123,22 +123,13 @@ function applyVisibilitySnapshot(nextVisibility) {
   }
 }
 
-function sendSyncMessage(message) {
-  if (!syncSocket || syncSocket.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
-  syncSocket.send(JSON.stringify(message));
-}
-
 function broadcastVisibilityState() {
-  if (viewMode !== "dm") {
+  if (viewMode !== "dm" || !firebaseReady || !databaseRef) {
     return;
   }
 
-  sendSyncMessage({
-    type: "visibility_state",
-    markerVisibility
+  databaseRef.set(markerVisibility).catch((error) => {
+    console.warn("Unable to sync marker visibility to Firebase.", error);
   });
 }
 
@@ -150,6 +141,38 @@ function setMarkerRevealed(marker, revealed) {
   if (viewMode === "dm") {
     renderDmControls();
     broadcastVisibilityState();
+  }
+}
+
+function initializeFirebaseSync() {
+  if (!window.firebase || !window.FIREBASE_CONFIG) {
+    console.warn("Firebase SDK or config is unavailable; using local-only marker state.");
+    return;
+  }
+
+  try {
+    const app = window.firebase.apps.length
+      ? window.firebase.app()
+      : window.firebase.initializeApp(window.FIREBASE_CONFIG);
+
+    const database = window.firebase.database(app);
+    databaseRef = database.ref(FIREBASE_PATH);
+    firebaseReady = true;
+
+    databaseRef.on("value", (snapshot) => {
+      const data = snapshot.val();
+
+      if (data && typeof data === "object") {
+        applyVisibilitySnapshot(data);
+        return;
+      }
+
+      if (viewMode === "dm") {
+        broadcastVisibilityState();
+      }
+    });
+  } catch (error) {
+    console.warn("Unable to initialize Firebase sync.", error);
   }
 }
 
@@ -318,59 +341,6 @@ function updatePortraitRail() {
   syncPortraitRailHeight();
 }
 
-function scheduleSyncReconnect() {
-  if (syncRetryId) {
-    return;
-  }
-
-  syncRetryId = window.setTimeout(() => {
-    syncRetryId = 0;
-    connectSyncSocket();
-  }, SOCKET_RETRY_MS);
-}
-
-function handleSyncMessage(event) {
-  try {
-    const message = JSON.parse(event.data);
-
-    if (message.type === "visibility_state") {
-      applyVisibilitySnapshot(message.markerVisibility);
-    }
-  } catch (error) {
-    console.warn("Unable to process sync message.", error);
-  }
-}
-
-function connectSyncSocket() {
-  if (!window.WebSocket) {
-    return;
-  }
-
-  if (syncSocket && (syncSocket.readyState === WebSocket.OPEN || syncSocket.readyState === WebSocket.CONNECTING)) {
-    return;
-  }
-
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  syncSocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
-
-  syncSocket.addEventListener("open", () => {
-    sendSyncMessage({
-      type: "hello",
-      role: viewMode
-    });
-
-    if (viewMode === "dm") {
-      broadcastVisibilityState();
-    }
-  });
-
-  syncSocket.addEventListener("message", handleSyncMessage);
-  syncSocket.addEventListener("close", scheduleSyncReconnect);
-  syncSocket.addEventListener("error", () => {
-    syncSocket?.close();
-  });
-}
-
 markerToggle?.addEventListener("click", () => {
   const markersVisible = markerToggle.getAttribute("aria-pressed") === "true";
   const nextVisible = !markersVisible;
@@ -532,4 +502,4 @@ updateMapHeader();
 applyAllMarkerStates();
 renderDmControls();
 syncPortraitRailHeight();
-connectSyncSocket();
+initializeFirebaseSync();
