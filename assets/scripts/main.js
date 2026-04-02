@@ -14,9 +14,11 @@ const dmLocationList = document.getElementById("dm-location-list");
 const dmPortraitList = document.getElementById("dm-portrait-list");
 const viewIntro = document.getElementById("view-intro");
 const mapTitle = document.getElementById("map-title");
-const contentCache = new Map();
 
 const VISIBILITY_STORAGE_KEY = "barovia-marker-visibility";
+const VISIBILITY_STORAGE_VERSION_KEY = "barovia-marker-visibility-version";
+const VISIBILITY_STORAGE_VERSION = 2;
+const FIREBASE_PATH = "maps/barovia/markerVisibility";
 const ROOT_MAP = {
   id: "barovia",
   src: "assets/images/Map%20-%20Barovia.jpg",
@@ -34,16 +36,36 @@ const viewMode =
 const DEFAULT_REVEALED_MARKERS = {
   "barovia:gates-of-barovia-east": true,
   "barovia:roadside-corpse": true,
-  "barovia:fortunetellers-tent": true
+  "barovia:fortunetellers-tent": true,
+  "barovia:village-of-barovia": true,
+  "village-of-barovia:bildraths-mercantile": true,
+  "village-of-barovia:blood-on-the-vine-tavern": true,
+  "village-of-barovia:mad-marys-townhouse": true,
+  "village-of-barovia:burgomasters-mansion": true,
+  "village-of-barovia:donavich-portrait": true,
+  "village-of-barovia:doru-portrait": true,
+  "village-of-barovia:ireena-kolyana-portrait": true,
+  "village-of-barovia:ismark-the-lesser-portrait": true,
+  "village-of-barovia:mad-mary-portrait": true
 };
 const markerVisibility = loadMarkerVisibility();
 const mapHistory = [{ ...ROOT_MAP }];
 let currentMap = { ...ROOT_MAP };
+let databaseRef = null;
+let firebaseReady = false;
 
 function loadMarkerVisibility() {
   try {
     const stored = window.localStorage.getItem(VISIBILITY_STORAGE_KEY);
     const parsed = stored ? JSON.parse(stored) : {};
+    const storedVersion = Number(
+      window.localStorage.getItem(VISIBILITY_STORAGE_VERSION_KEY) || "0"
+    );
+
+    if (storedVersion < VISIBILITY_STORAGE_VERSION) {
+      return { ...parsed, ...DEFAULT_REVEALED_MARKERS };
+    }
+
     return { ...DEFAULT_REVEALED_MARKERS, ...parsed };
   } catch (error) {
     console.warn("Unable to read marker visibility from localStorage.", error);
@@ -56,6 +78,10 @@ function saveMarkerVisibility() {
     window.localStorage.setItem(
       VISIBILITY_STORAGE_KEY,
       JSON.stringify(markerVisibility)
+    );
+    window.localStorage.setItem(
+      VISIBILITY_STORAGE_VERSION_KEY,
+      String(VISIBILITY_STORAGE_VERSION)
     );
   } catch (error) {
     console.warn("Unable to save marker visibility to localStorage.", error);
@@ -83,12 +109,70 @@ function isPortraitMarker(marker) {
   return marker.classList.contains("portrait-marker");
 }
 
+function applyVisibilitySnapshot(nextVisibility) {
+  for (const key of Object.keys(markerVisibility)) {
+    delete markerVisibility[key];
+  }
+
+  Object.assign(markerVisibility, DEFAULT_REVEALED_MARKERS, nextVisibility || {});
+  saveMarkerVisibility();
+  applyAllMarkerStates();
+
+  if (viewMode === "dm") {
+    renderDmControls();
+  }
+}
+
+function broadcastVisibilityState() {
+  if (viewMode !== "dm" || !firebaseReady || !databaseRef) {
+    return;
+  }
+
+  databaseRef.set(markerVisibility).catch((error) => {
+    console.warn("Unable to sync marker visibility to Firebase.", error);
+  });
+}
+
 function setMarkerRevealed(marker, revealed) {
   markerVisibility[getMarkerVisibilityKey(marker)] = revealed;
   saveMarkerVisibility();
   applyAllMarkerStates();
+
   if (viewMode === "dm") {
     renderDmControls();
+    broadcastVisibilityState();
+  }
+}
+
+function initializeFirebaseSync() {
+  if (!window.firebase || !window.FIREBASE_CONFIG) {
+    console.warn("Firebase SDK or config is unavailable; using local-only marker state.");
+    return;
+  }
+
+  try {
+    const app = window.firebase.apps.length
+      ? window.firebase.app()
+      : window.firebase.initializeApp(window.FIREBASE_CONFIG);
+
+    const database = window.firebase.database(app);
+    databaseRef = database.ref(FIREBASE_PATH);
+    firebaseReady = true;
+
+    databaseRef.on("value", (snapshot) => {
+      const data = snapshot.val();
+
+      if (data && typeof data === "object") {
+        applyVisibilitySnapshot(data);
+        return;
+      }
+
+      if (viewMode === "dm") {
+        broadcastVisibilityState();
+      }
+    });
+  } catch (error) {
+    console.warn("Unable to initialize Firebase sync.", error);
   }
 }
 
@@ -277,42 +361,37 @@ mapReturn?.addEventListener("click", async () => {
 });
 
 async function loadLocationContent(src) {
-  if (contentCache.has(src)) {
-    return contentCache.get(src);
-  }
-
-  const response = await fetch(src);
+  const response = await fetch(src, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Failed to load ${src}`);
   }
 
-  const html = await response.text();
-  contentCache.set(src, html);
-  return html;
+  return response.text();
 }
 
-function showImagePanel(marker) {
-  if (!locationPanel || !locationTitle || !locationPanelBody) {
+function renderMarkerFallback(marker) {
+  if (!locationPanelBody) {
     return;
   }
 
-  if (locationEyebrow) {
-    locationEyebrow.textContent = "Selected Portrait";
+  const imageSrc = marker.dataset.imageSrc;
+  if (!imageSrc) {
+    locationPanelBody.innerHTML = '<p class="location-panel__status">No content is available for this marker yet.</p>';
+    return;
   }
 
-  locationTitle.textContent = marker.dataset.locationName || "Portrait";
   locationPanelBody.innerHTML = `
     <div class="location-panel__split location-panel__split--portrait">
       <img
-        src="${marker.dataset.imageSrc}"
+        src="${imageSrc}"
         alt="${marker.dataset.imageAlt || marker.dataset.locationName || "Portrait"}"
         class="location-panel__image location-panel__image--portrait"
       >
-      <div class="location-panel__portrait-copy"></div>
+      <div class="location-panel__content">
+        <p>No character notes have been added for this portrait yet.</p>
+      </div>
     </div>
   `;
-  locationPanel.hidden = false;
-  locationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function wait(ms) {
@@ -388,26 +467,29 @@ for (const marker of markerButtons) {
       return;
     }
 
-    const imageSrc = marker.dataset.imageSrc;
-    if (imageSrc) {
-      showImagePanel(marker);
-      return;
-    }
-
     const locationSrc = marker.dataset.locationSrc;
     if (locationEyebrow) {
-      locationEyebrow.textContent = "Selected Location";
+      locationEyebrow.textContent = isPortraitMarker(marker)
+        ? "Selected Portrait"
+        : "Selected Location";
     }
-    locationTitle.textContent = marker.dataset.locationName || "Location";
+    locationTitle.textContent = marker.dataset.locationName || (isPortraitMarker(marker) ? "Portrait" : "Location");
     locationPanelBody.innerHTML = '<p class="location-panel__status">Loading...</p>';
     locationPanel.hidden = false;
     locationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    if (!locationSrc) {
+      renderMarkerFallback(marker);
+      return;
+    }
 
     try {
       const html = await loadLocationContent(locationSrc);
       locationPanelBody.innerHTML = html;
     } catch (error) {
-      locationPanelBody.innerHTML = '<p class="location-panel__status">Failed to load location content.</p>';
+      locationPanelBody.innerHTML = isPortraitMarker(marker)
+        ? '<p class="location-panel__status">Failed to load character content.</p>'
+        : '<p class="location-panel__status">Failed to load location content.</p>';
       console.error(error);
     }
   });
@@ -420,3 +502,4 @@ updateMapHeader();
 applyAllMarkerStates();
 renderDmControls();
 syncPortraitRailHeight();
+initializeFirebaseSync();
