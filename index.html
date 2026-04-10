@@ -6,6 +6,7 @@
   <title>Barovia Map Player View</title>
   <link rel="stylesheet" href="assets/styles/main.css">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
   <script src="assets/scripts/firebase-config.js"></script>
   <script src="assets/scripts/main.js" defer></script>
@@ -20,7 +21,46 @@
       </p>
     </header>
 
-    <section class="map-shell" aria-labelledby="map-title">
+    <section id="auth-panel" class="auth-shell" aria-labelledby="auth-title">
+      <div class="auth-shell__card">
+        <div class="auth-shell__header">
+          <p class="eyebrow">Adventurer Access</p>
+          <h2 id="auth-title">Sign in to enter Barovia</h2>
+          <p id="auth-copy" class="auth-shell__copy">
+            Players need an account before they can open the shared map.
+          </p>
+        </div>
+
+        <div id="auth-message" class="auth-shell__message" hidden></div>
+
+        <form id="auth-form" class="auth-form">
+          <label class="auth-form__field">
+            <span>Username</span>
+            <input id="auth-username" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" required>
+          </label>
+
+          <label class="auth-form__field">
+            <span>Password</span>
+            <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="6" required>
+          </label>
+
+          <div class="auth-form__actions">
+            <button type="submit" id="auth-signin" class="auth-button auth-button--primary">Sign In</button>
+            <button type="button" id="auth-signup" class="auth-button">Create Account</button>
+          </div>
+        </form>
+
+        <div id="session-panel" class="session-panel" hidden>
+          <p id="session-summary" class="session-panel__summary"></p>
+          <div class="session-panel__actions">
+            <a id="dm-link" class="auth-button" href="dm.html" hidden>Open DM View</a>
+            <button type="button" id="auth-signout" class="auth-button">Sign Out</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="app-shell" class="map-shell" aria-labelledby="map-title" hidden>
       <div class="map-frame">
         <div class="map-frame__topbar">
           <h2 id="map-title">Map of Barovia</h2>
@@ -60,6 +100,7 @@
             <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="ireena-kolyana-portrait" data-location-name="Ireena Kolyana" data-location-type="portrait" data-image-src="assets/images/Ireena%20Kolyana.jpg" data-image-alt="Portrait of Ireena Kolyana" data-location-src="content/characters/ireena-kolyana.html" aria-controls="location-panel" aria-label="Show portrait of Ireena Kolyana"><img src="assets/images/Ireena%20Kolyana.jpg" alt="Ireena Kolyana"><span>Ireena Kolyana</span></button>
             <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="ismark-the-lesser-portrait" data-location-name="Ismark-the-Lesser" data-location-type="portrait" data-image-src="assets/images/Ismark-the-Lesser.jpg" data-image-alt="Portrait of Ismark-the-Lesser" data-location-src="content/characters/ismark-the-lesser.html" aria-controls="location-panel" aria-label="Show portrait of Ismark-the-Lesser"><img src="assets/images/Ismark-the-Lesser.jpg" alt="Ismark-the-Lesser"><span>Ismark-the-Lesser</span></button>
             <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="mad-mary-portrait" data-location-name="Mad Mary" data-location-type="portrait" data-image-src="assets/images/Mad%20Mary.jpg" data-image-alt="Portrait of Mad Mary" data-location-src="content/characters/mad-mary.html" aria-controls="location-panel" aria-label="Show portrait of Mad Mary"><img src="assets/images/Mad%20Mary.jpg" alt="Mad Mary"><span>Mad Mary</span></button>
+            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="parriwimple-portrait" data-location-name="Parriwimple" data-location-type="portrait" data-image-src="assets/images/parriwimple.jpg" data-image-alt="Portrait of Parriwimple" data-location-src="content/characters/parriwimple.html" aria-controls="location-panel" aria-label="Show portrait of Parriwimple"><img src="assets/images/parriwimple.jpg" alt="Parriwimple"><span>Parriwimple</span></button>
           </aside>
         </div>
       </div>

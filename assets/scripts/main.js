@@ -1,4 +1,4 @@
-﻿const markerButtons = Array.from(document.querySelectorAll(".map-marker, .portrait-marker"));
+const markerButtons = Array.from(document.querySelectorAll(".map-marker, .portrait-marker"));
 const locationPanel = document.getElementById("location-panel");
 const locationTitle = document.getElementById("location-title");
 const locationEyebrow = document.getElementById("location-eyebrow");
@@ -14,17 +14,33 @@ const dmLocationList = document.getElementById("dm-location-list");
 const dmPortraitList = document.getElementById("dm-portrait-list");
 const viewIntro = document.getElementById("view-intro");
 const mapTitle = document.getElementById("map-title");
+const appShell = document.getElementById("app-shell");
+const authForm = document.getElementById("auth-form");
+const authUsernameInput = document.getElementById("auth-username");
+const authPasswordInput = document.getElementById("auth-password");
+const authSigninButton = document.getElementById("auth-signin");
+const authSignupButton = document.getElementById("auth-signup");
+const authSignoutButton = document.getElementById("auth-signout");
+const authMessage = document.getElementById("auth-message");
+const authCopy = document.getElementById("auth-copy");
+const sessionPanel = document.getElementById("session-panel");
+const sessionSummary = document.getElementById("session-summary");
+const dmLink = document.getElementById("dm-link");
 
 const VISIBILITY_STORAGE_KEY = "barovia-marker-visibility";
 const VISIBILITY_STORAGE_VERSION_KEY = "barovia-marker-visibility-version";
 const VISIBILITY_STORAGE_VERSION = 2;
 const FIREBASE_PATH = "maps/barovia/markerVisibility";
+const USERS_PATH = "users";
 const ROOT_MAP = {
   id: "barovia",
   src: "assets/images/Map%20-%20Barovia.jpg",
   alt: "Illustrated map of Barovia",
   title: "Map of Barovia"
 };
+const AUTH_CONFIG = window.APP_AUTH_CONFIG || {};
+const USERNAME_DOMAIN = AUTH_CONFIG.usernameDomain || "barovia.local";
+const ADMIN_ROLE = AUTH_CONFIG.adminRole || "admin";
 const params = new URLSearchParams(window.location.search);
 const bodyViewMode = document.body.dataset.view;
 const viewMode =
@@ -46,13 +62,22 @@ const DEFAULT_REVEALED_MARKERS = {
   "village-of-barovia:doru-portrait": true,
   "village-of-barovia:ireena-kolyana-portrait": true,
   "village-of-barovia:ismark-the-lesser-portrait": true,
-  "village-of-barovia:mad-mary-portrait": true
+  "village-of-barovia:mad-mary-portrait": true,
+  "village-of-barovia:parriwimple-portrait": true
 };
 const markerVisibility = loadMarkerVisibility();
 const mapHistory = [{ ...ROOT_MAP }];
+
 let currentMap = { ...ROOT_MAP };
+let firebaseApp = null;
+let firebaseAuth = null;
+let firebaseDatabase = null;
 let databaseRef = null;
 let firebaseReady = false;
+let firebaseSyncStarted = false;
+let currentUser = null;
+let currentUserProfile = null;
+let unauthorizedRedirectTimer = null;
 
 function loadMarkerVisibility() {
   try {
@@ -109,6 +134,69 @@ function isPortraitMarker(marker) {
   return marker.classList.contains("portrait-marker");
 }
 
+function isAdminProfile(profile) {
+  return profile?.role === ADMIN_ROLE;
+}
+
+function canAccessCurrentView() {
+  if (!currentUser) {
+    return false;
+  }
+
+  return viewMode === "dm" ? isAdminProfile(currentUserProfile) : true;
+}
+
+function setAuthMessage(message, type = "info") {
+  if (!authMessage) {
+    return;
+  }
+
+  if (!message) {
+    authMessage.hidden = true;
+    authMessage.textContent = "";
+    authMessage.dataset.state = "";
+    return;
+  }
+
+  authMessage.hidden = false;
+  authMessage.textContent = message;
+  authMessage.dataset.state = type;
+}
+
+function setAuthBusy(isBusy) {
+  if (authUsernameInput) {
+    authUsernameInput.disabled = isBusy;
+  }
+
+  if (authPasswordInput) {
+    authPasswordInput.disabled = isBusy;
+  }
+
+  if (authSigninButton) {
+    authSigninButton.disabled = isBusy;
+  }
+
+  if (authSignupButton) {
+    authSignupButton.disabled = isBusy;
+  }
+}
+
+function normalizeUsername(value) {
+  return value.trim().toLowerCase();
+}
+
+function isValidUsername(username) {
+  return /^[a-z0-9._-]{3,24}$/.test(username);
+}
+
+function usernameToEmail(username) {
+  return `${username}@${USERNAME_DOMAIN}`;
+}
+
+function getDisplayName() {
+  return currentUserProfile?.username || currentUser?.displayName || currentUser?.email || "Unknown user";
+}
+
 function applyVisibilitySnapshot(nextVisibility) {
   for (const key of Object.keys(markerVisibility)) {
     delete markerVisibility[key];
@@ -118,22 +206,27 @@ function applyVisibilitySnapshot(nextVisibility) {
   saveMarkerVisibility();
   applyAllMarkerStates();
 
-  if (viewMode === "dm") {
+  if (viewMode === "dm" && canAccessCurrentView()) {
     renderDmControls();
   }
 }
 
 function broadcastVisibilityState() {
-  if (viewMode !== "dm" || !firebaseReady || !databaseRef) {
+  if (viewMode !== "dm" || !canAccessCurrentView() || !firebaseReady || !databaseRef) {
     return;
   }
 
   databaseRef.set(markerVisibility).catch((error) => {
     console.warn("Unable to sync marker visibility to Firebase.", error);
+    setAuthMessage("DM state could not be saved to Firebase. Check your database rules.", "error");
   });
 }
 
 function setMarkerRevealed(marker, revealed) {
+  if (viewMode === "dm" && !canAccessCurrentView()) {
+    return;
+  }
+
   markerVisibility[getMarkerVisibilityKey(marker)] = revealed;
   saveMarkerVisibility();
   applyAllMarkerStates();
@@ -144,54 +237,199 @@ function setMarkerRevealed(marker, revealed) {
   }
 }
 
-function initializeFirebaseSync() {
+function stopFirebaseSync() {
+  if (databaseRef) {
+    databaseRef.off();
+  }
+
+  databaseRef = null;
+  firebaseReady = false;
+  firebaseSyncStarted = false;
+}
+
+function initializeFirebaseServices() {
   if (!window.firebase || !window.FIREBASE_CONFIG) {
-    console.warn("Firebase SDK or config is unavailable; using local-only marker state.");
-    return;
+    setAuthMessage("Firebase SDK or config is unavailable, so authentication cannot start.", "error");
+    return false;
   }
 
   try {
-    const app = window.firebase.apps.length
+    firebaseApp = window.firebase.apps.length
       ? window.firebase.app()
       : window.firebase.initializeApp(window.FIREBASE_CONFIG);
-
-    const database = window.firebase.database(app);
-    databaseRef = database.ref(FIREBASE_PATH);
-    firebaseReady = true;
-
-    databaseRef.on("value", (snapshot) => {
-      const data = snapshot.val();
-
-      if (data && typeof data === "object") {
-        applyVisibilitySnapshot(data);
-        return;
-      }
-
-      if (viewMode === "dm") {
-        broadcastVisibilityState();
-      }
-    });
+    firebaseAuth = window.firebase.auth(firebaseApp);
+    firebaseDatabase = window.firebase.database(firebaseApp);
+    return true;
   } catch (error) {
-    console.warn("Unable to initialize Firebase sync.", error);
+    console.warn("Unable to initialize Firebase services.", error);
+    setAuthMessage("Firebase could not be initialized. Check your config and reload the page.", "error");
+    return false;
   }
 }
 
-function applyMarkerState(marker) {
-  const onCurrentMap = isMarkerOnCurrentMap(marker);
-  const revealed = isMarkerRevealed(marker);
-  const isPlayerView = viewMode === "player";
-  const shouldHide = !onCurrentMap || (isPlayerView && !revealed);
+function initializeFirebaseSync() {
+  if (!firebaseDatabase || firebaseSyncStarted) {
+    return;
+  }
 
-  marker.classList.toggle("map-marker--revealed", revealed);
-  marker.classList.toggle("map-marker--dm-hidden", viewMode === "dm" && !revealed);
-  marker.hidden = shouldHide;
-  marker.disabled = shouldHide;
-  marker.setAttribute("aria-hidden", String(shouldHide));
+  databaseRef = firebaseDatabase.ref(FIREBASE_PATH);
+  firebaseReady = true;
+  firebaseSyncStarted = true;
 
-  if (isPortraitMarker(marker)) {
-    marker.style.display = shouldHide ? "none" : "grid";
-  } else {
-    marker.style.display = shouldHide ? "none" : "";
+  databaseRef.on("value", (snapshot) => {
+    const data = snapshot.val();
+
+    if (data && typeof data === "object") {
+      applyVisibilitySnapshot(data);
+      return;
+    }
+
+    if (viewMode === "dm" && canAccessCurrentView()) {
+      broadcastVisibilityState();
+    }
+  }, (error) => {
+    console.warn("Unable to read marker visibility from Firebase.", error);
+    setAuthMessage("Map sync could not read Firebase data. Check your database rules.", "error");
+  });
+}
+
+async function loadUserProfile(uid) {
+  if (!firebaseDatabase || !uid) {
+    return null;
+  }
+
+  try {
+    const snapshot = await firebaseDatabase.ref(`${USERS_PATH}/${uid}`).once("value");
+    const profile = snapshot.val();
+    return profile && typeof profile === "object" ? profile : null;
+  } catch (error) {
+    console.warn("Unable to load user profile.", error);
+    return null;
+  }
+}
+
+async function ensureUserProfile(user, username) {
+  if (!firebaseDatabase || !user) {
+    return null;
+  }
+
+  const userRef = firebaseDatabase.ref(`${USERS_PATH}/${user.uid}`);
+  const now = new Date().toISOString();
+  let nextProfile = null;
+
+  try {
+    const snapshot = await userRef.once("value");
+    const existingProfile = snapshot.val();
+
+    nextProfile = {
+      username: username || existingProfile?.username || user.displayName || user.email?.split("@")[0] || "player",
+      role: existingProfile?.role || "player",
+      createdAt: existingProfile?.createdAt || now,
+      lastLoginAt: now
+    };
+
+    await userRef.update(nextProfile);
+
+    if (user.displayName !== nextProfile.username) {
+      await user.updateProfile({ displayName: nextProfile.username });
+    }
+
+    return nextProfile;
+  } catch (error) {
+    console.warn("Unable to ensure user profile.", error);
+    throw error;
+  }
+}
+
+function scheduleUnauthorizedRedirect() {
+  if (viewMode !== "dm") {
+    return;
+  }
+
+  window.clearTimeout(unauthorizedRedirectTimer);
+  unauthorizedRedirectTimer = window.setTimeout(() => {
+    window.location.href = "index.html";
+  }, 1800);
+}
+
+function cancelUnauthorizedRedirect() {
+  window.clearTimeout(unauthorizedRedirectTimer);
+  unauthorizedRedirectTimer = null;
+}
+
+function updateAuthCopy() {
+  if (!authCopy) {
+    return;
+  }
+
+  if (!currentUser) {
+    authCopy.textContent =
+      viewMode === "dm"
+        ? "Only the admin account can open the DM controls for this page."
+        : "Players need an account before they can open the shared map.";
+    return;
+  }
+
+  if (viewMode === "dm" && !canAccessCurrentView()) {
+    authCopy.textContent = "This account is signed in, but it does not have DM access.";
+    return;
+  }
+
+  authCopy.textContent =
+    viewMode === "dm"
+      ? "You are signed in with the DM account."
+      : "You are signed in and can open the player map.";
+}
+
+function updateSessionPanel() {
+  if (!sessionPanel || !sessionSummary) {
+    return;
+  }
+
+  if (!currentUser) {
+    sessionPanel.hidden = true;
+    sessionSummary.textContent = "";
+    if (authForm) {
+      authForm.hidden = false;
+    }
+    return;
+  }
+
+  if (authForm) {
+    authForm.hidden = true;
+  }
+
+  const roleLabel = isAdminProfile(currentUserProfile) ? "admin" : "player";
+  sessionPanel.hidden = false;
+  sessionSummary.textContent = `Signed in as ${getDisplayName()} (${roleLabel}).`;
+
+  if (dmLink) {
+    dmLink.hidden = !isAdminProfile(currentUserProfile);
+  }
+}
+
+function updateAppVisibility() {
+  const allowed = canAccessCurrentView();
+
+  if (appShell) {
+    appShell.hidden = !allowed;
+  }
+
+  if (dmControls) {
+    dmControls.hidden = viewMode !== "dm" || !allowed;
+  }
+
+  if (locationPanel && !allowed) {
+    locationPanel.hidden = true;
+  }
+
+  if (allowed) {
+    applyAllMarkerStates();
+    updateMapHeader();
+    syncPortraitRailHeight();
+    if (viewMode === "dm") {
+      renderDmControls();
+    }
   }
 }
 
@@ -259,7 +497,7 @@ function createDmControlItem(marker, container) {
 }
 
 function renderDmControls() {
-  if (viewMode !== "dm" || !dmControls || !dmLocationList || !dmPortraitList) {
+  if (viewMode !== "dm" || !canAccessCurrentView() || !dmControls || !dmLocationList || !dmPortraitList) {
     return;
   }
 
@@ -292,6 +530,25 @@ function applyViewMode() {
 
   if (markerToggle) {
     markerToggle.hidden = false;
+  }
+}
+
+function applyMarkerState(marker) {
+  const onCurrentMap = isMarkerOnCurrentMap(marker);
+  const revealed = isMarkerRevealed(marker);
+  const isPlayerView = viewMode === "player";
+  const shouldHide = !onCurrentMap || (isPlayerView && !revealed);
+
+  marker.classList.toggle("map-marker--revealed", revealed);
+  marker.classList.toggle("map-marker--dm-hidden", viewMode === "dm" && !revealed);
+  marker.hidden = shouldHide;
+  marker.disabled = shouldHide;
+  marker.setAttribute("aria-hidden", String(shouldHide));
+
+  if (isPortraitMarker(marker)) {
+    marker.style.display = shouldHide ? "none" : "grid";
+  } else {
+    marker.style.display = shouldHide ? "none" : "";
   }
 }
 
@@ -401,7 +658,7 @@ function wait(ms) {
 }
 
 async function switchMap(nextMap, options = {}) {
-  if (!mapImage || !nextMap?.src) {
+  if (!mapImage || !nextMap?.src || !canAccessCurrentView()) {
     return;
   }
 
@@ -453,6 +710,10 @@ async function showMapImage(marker) {
 
 for (const marker of markerButtons) {
   marker.addEventListener("click", async () => {
+    if (!canAccessCurrentView()) {
+      return;
+    }
+
     if (!isPortraitMarker(marker) && mapStage?.classList.contains("map-stage--markers-hidden")) {
       return;
     }
@@ -495,11 +756,178 @@ for (const marker of markerButtons) {
   });
 }
 
+function getFriendlyAuthError(error) {
+  switch (error?.code) {
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+    case "auth/invalid-login-credentials":
+      return "That username and password combination did not match.";
+    case "auth/email-already-in-use":
+      return "That username already exists. Try signing in instead.";
+    case "auth/weak-password":
+      return "Choose a password with at least 6 characters.";
+    case "auth/network-request-failed":
+      return "Firebase could not be reached. Check your internet connection.";
+    default:
+      return error?.message || "Authentication failed.";
+  }
+}
+
+async function signInWithUsername(username, password) {
+  if (!firebaseAuth) {
+    throw new Error("Firebase Auth is not available.");
+  }
+
+  return firebaseAuth.signInWithEmailAndPassword(usernameToEmail(username), password);
+}
+
+async function createUserWithUsername(username, password) {
+  if (!firebaseAuth) {
+    throw new Error("Firebase Auth is not available.");
+  }
+
+  const credential = await firebaseAuth.createUserWithEmailAndPassword(
+    usernameToEmail(username),
+    password
+  );
+
+  await ensureUserProfile(credential.user, username);
+  return credential;
+}
+
+authForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const username = normalizeUsername(authUsernameInput?.value || "");
+  const password = authPasswordInput?.value || "";
+
+  if (!isValidUsername(username)) {
+    setAuthMessage("Use a username with 3-24 letters, numbers, dots, underscores, or dashes.", "error");
+    return;
+  }
+
+  if (password.length < 6) {
+    setAuthMessage("Choose a password with at least 6 characters.", "error");
+    return;
+  }
+
+  setAuthBusy(true);
+  setAuthMessage("Signing in...", "info");
+
+  try {
+    await signInWithUsername(username, password);
+    authPasswordInput.value = "";
+    setAuthMessage("", "info");
+  } catch (error) {
+    setAuthMessage(getFriendlyAuthError(error), "error");
+  } finally {
+    setAuthBusy(false);
+  }
+});
+
+authSignupButton?.addEventListener("click", async () => {
+  const username = normalizeUsername(authUsernameInput?.value || "");
+  const password = authPasswordInput?.value || "";
+
+  if (!isValidUsername(username)) {
+    setAuthMessage("Use a username with 3-24 letters, numbers, dots, underscores, or dashes.", "error");
+    return;
+  }
+
+  if (password.length < 6) {
+    setAuthMessage("Choose a password with at least 6 characters.", "error");
+    return;
+  }
+
+  setAuthBusy(true);
+  setAuthMessage("Creating account...", "info");
+
+  try {
+    await createUserWithUsername(username, password);
+    authPasswordInput.value = "";
+    setAuthMessage("Account created. You are now signed in.", "success");
+  } catch (error) {
+    setAuthMessage(getFriendlyAuthError(error), "error");
+  } finally {
+    setAuthBusy(false);
+  }
+});
+
+authSignoutButton?.addEventListener("click", async () => {
+  if (!firebaseAuth) {
+    return;
+  }
+
+  try {
+    await firebaseAuth.signOut();
+    setAuthMessage("Signed out.", "info");
+  } catch (error) {
+    setAuthMessage(getFriendlyAuthError(error), "error");
+  }
+});
+
+async function handleAuthStateChanged(user) {
+  currentUser = user;
+  currentUserProfile = null;
+  cancelUnauthorizedRedirect();
+
+  stopFirebaseSync();
+
+  if (!user) {
+    updateAuthCopy();
+    updateSessionPanel();
+    updateAppVisibility();
+    setAuthBusy(false);
+    if (viewMode === "dm") {
+      setAuthMessage("Sign in with the admin account to open the DM page.", "info");
+    } else if (!authMessage?.textContent) {
+      setAuthMessage("", "info");
+    }
+    return;
+  }
+
+  try {
+    const fallbackUsername = normalizeUsername(
+      user.displayName || user.email?.split("@")[0] || authUsernameInput?.value || ""
+    );
+    await ensureUserProfile(user, fallbackUsername);
+    currentUserProfile = await loadUserProfile(user.uid);
+  } catch (error) {
+    console.warn("Unable to finish loading the signed-in user profile.", error);
+    setAuthMessage("Signed in, but the user profile could not be loaded. Check Firebase rules.", "error");
+  }
+
+  updateAuthCopy();
+  updateSessionPanel();
+
+  if (viewMode === "dm" && !canAccessCurrentView()) {
+    updateAppVisibility();
+    setAuthMessage("This account is not an admin. Redirecting to the player page...", "error");
+    scheduleUnauthorizedRedirect();
+    return;
+  }
+
+  updateAppVisibility();
+  initializeFirebaseSync();
+  setAuthMessage("", "info");
+}
+
+function initializeAuth() {
+  if (!initializeFirebaseServices()) {
+    return;
+  }
+
+  firebaseAuth.onAuthStateChanged((user) => {
+    handleAuthStateChanged(user);
+  });
+}
+
 window.addEventListener("resize", syncPortraitRailHeight);
 
 applyViewMode();
 updateMapHeader();
 applyAllMarkerStates();
-renderDmControls();
-syncPortraitRailHeight();
-initializeFirebaseSync();
+updateSessionPanel();
+updateAuthCopy();
+updateAppVisibility();
+initializeAuth();
