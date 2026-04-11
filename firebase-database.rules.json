@@ -5,7 +5,17 @@
         "markerVisibility": {
           ".read": "auth != null",
           ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+        },
+        "customMarkers": {
+          ".read": "auth != null",
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
         }
+      }
+    },
+    "presence": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid"
       }
     },
     "users": {
@@ -14,6 +24,9 @@
         ".write": "auth != null && auth.uid === $uid",
         "username": {
           ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9._-]{3,24}$/)"
+        },
+        "displayName": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24"
         },
         "role": {
           ".validate": "(data.exists() && newData.val() === data.val()) || (!data.exists() && newData.val() === 'player')"

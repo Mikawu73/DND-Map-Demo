@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barovia Map Player View</title>
-  <link rel="stylesheet" href="assets/styles/main.css">
+  <link rel="stylesheet" href="assets/styles/main.css?v=20260411-3">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
-  <script src="assets/scripts/firebase-config.js"></script>
-  <script src="assets/scripts/main.js" defer></script>
+  <script src="assets/scripts/firebase-config.js?v=20260411-3"></script>
+  <script src="assets/scripts/main.js?v=20260411-3" defer></script>
 </head>
 <body data-view="player">
   <main class="page">
@@ -67,6 +67,7 @@
           <div class="map-frame__actions">
             <button type="button" id="map-return" class="map-return" hidden>Return to Barovia</button>
             <button type="button" id="marker-toggle" class="marker-toggle" aria-pressed="true">Hide Markers</button>
+            <button type="button" id="app-signout" class="map-return" hidden>Sign Out</button>
           </div>
         </div>
 
@@ -104,6 +105,22 @@
           </aside>
         </div>
       </div>
+    </section>
+
+    <section id="presence-panel" class="presence-panel" aria-labelledby="presence-title" hidden>
+      <div class="presence-panel__header">
+        <p class="location-panel__eyebrow">Party Presence</p>
+        <h2 id="presence-title">Current Players</h2>
+      </div>
+      <form id="display-name-form" class="display-name-form">
+        <label class="display-name-form__field">
+          <span>Your Display Name</span>
+          <input id="display-name-input" type="text" maxlength="24" placeholder="Enter the name shown to other players">
+        </label>
+        <button type="submit" id="display-name-save" class="auth-button">Save Name</button>
+      </form>
+      <p id="display-name-status" class="display-name-status" hidden></p>
+      <div id="presence-list" class="presence-list"></div>
     </section>
 
     <section id="dm-controls" class="dm-panel" aria-labelledby="dm-controls-title" hidden>

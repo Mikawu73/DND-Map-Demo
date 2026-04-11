@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barovia Map DM View</title>
-  <link rel="stylesheet" href="assets/styles/main.css">
+  <link rel="stylesheet" href="assets/styles/main.css?v=20260411-3">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
-  <script src="assets/scripts/firebase-config.js"></script>
-  <script src="assets/scripts/main.js" defer></script>
+  <script src="assets/scripts/firebase-config.js?v=20260411-3"></script>
+  <script src="assets/scripts/main.js?v=20260411-3" defer></script>
 </head>
 <body data-view="dm">
   <main class="page">
@@ -67,6 +67,7 @@
           <div class="map-frame__actions">
             <button type="button" id="map-return" class="map-return" hidden>Return to Barovia</button>
             <button type="button" id="marker-toggle" class="marker-toggle" aria-pressed="true">Hide Markers</button>
+            <button type="button" id="app-signout" class="map-return" hidden>Sign Out</button>
           </div>
         </div>
 
@@ -112,6 +113,37 @@
         <h2 id="dm-controls-title">Marker Visibility</h2>
       </div>
       <p class="dm-panel__intro">Choose which locations and portraits are revealed to players. These settings are stored in this browser.</p>
+      <section class="dm-creator" aria-labelledby="dm-creator-title">
+        <div class="dm-creator__header">
+          <h3 id="dm-creator-title" class="dm-marker-group__title">Create Marker</h3>
+          <p class="dm-creator__intro">Fill in the marker details, then click the map to place it on the current view.</p>
+        </div>
+        <form id="dm-marker-form" class="dm-creator__form">
+          <label class="dm-creator__field">
+            <span>Title</span>
+            <input id="dm-marker-title" type="text" maxlength="80" placeholder="New marker title" required>
+          </label>
+          <label class="dm-creator__field">
+            <span>Type</span>
+            <select id="dm-marker-type">
+              <option value="location">Location</option>
+              <option value="information">Information</option>
+            </select>
+          </label>
+          <label class="dm-creator__field dm-creator__field--full">
+            <span>Description</span>
+            <textarea id="dm-marker-description" rows="4" placeholder="Add notes for players and yourself."></textarea>
+          </label>
+          <label class="dm-creator__check">
+            <input id="dm-marker-visible" type="checkbox" checked>
+            <span>Visible to players immediately</span>
+          </label>
+          <div class="dm-creator__actions">
+            <button type="button" id="dm-marker-place" class="dm-marker-item__toggle" aria-pressed="false">Place Marker On Map</button>
+          </div>
+        </form>
+        <p id="dm-marker-status" class="dm-creator__status" hidden></p>
+      </section>
       <div class="dm-marker-groups">
         <section class="dm-marker-group" aria-labelledby="dm-map-markers-title">
           <h3 id="dm-map-markers-title" class="dm-marker-group__title">Map Markers</h3>
