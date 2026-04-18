@@ -403,6 +403,45 @@ body {
   color: var(--ink);
 }
 
+.portrait-marker--strahd {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid #240808;
+  background:
+    linear-gradient(145deg, rgba(20, 5, 5, 0.96), rgba(92, 10, 12, 0.9) 48%, rgba(12, 8, 8, 0.98)),
+    rgba(36, 8, 8, 0.96);
+  box-shadow:
+    0 0 0 3px rgba(170, 22, 24, 0.35),
+    0 0 28px rgba(120, 0, 0, 0.35),
+    0 16px 28px rgba(10, 0, 0, 0.38);
+}
+
+.portrait-marker--strahd::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  border: 1px solid rgba(255, 229, 190, 0.25);
+  border-radius: 13px;
+}
+
+.portrait-marker--strahd img {
+  border: 2px solid rgba(220, 36, 36, 0.72);
+  box-shadow:
+    inset 0 0 18px rgba(0, 0, 0, 0.7),
+    0 0 18px rgba(180, 0, 0, 0.38);
+}
+
+.portrait-marker--strahd span {
+  font-family: "Blackadder ITC", "Edwardian Script ITC", "Lucida Calligraphy", "Brush Script MT", Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: #fff0d4;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  text-shadow: 0 1px 8px rgba(255, 0, 0, 0.45);
+}
+
 .portrait-marker.map-marker--dm-hidden {
   opacity: 0.46;
 }
@@ -528,7 +567,8 @@ body {
   gap: 8px;
 }
 
-.display-name-form__field span {
+.display-name-form__field span,
+.display-name-form__check span {
   font-size: 0.9rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -546,6 +586,23 @@ body {
 }
 
 .display-name-form__field input:focus-visible {
+  outline: 2px solid #2d160f;
+  outline-offset: 2px;
+}
+
+.display-name-form__check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.display-name-form__check input {
+  width: 18px;
+  height: 18px;
+}
+
+.display-name-form__check input:focus-visible {
   outline: 2px solid #2d160f;
   outline-offset: 2px;
 }
@@ -781,12 +838,26 @@ body {
   cursor: pointer;
 }
 
+.dm-marker-item__delete {
+  flex-shrink: 0;
+  min-width: 96px;
+  padding: 10px 14px;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  color: #fff7de;
+  background: #6c1515;
+  border: 1px solid rgba(108, 21, 21, 0.9);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
 .dm-marker-item__toggle[aria-pressed="true"] {
   background: #a01f1f;
   border-color: rgba(160, 31, 31, 0.9);
 }
 
-.dm-marker-item__toggle:focus-visible {
+.dm-marker-item__toggle:focus-visible,
+.dm-marker-item__delete:focus-visible {
   outline: 2px solid #2d160f;
   outline-offset: 3px;
 }
@@ -817,12 +888,56 @@ body {
   font-size: clamp(1.6rem, 3vw, 2.3rem);
 }
 
+.location-panel__title--strahd {
+  font-family: "Blackadder ITC", "Edwardian Script ITC", "Lucida Calligraphy", "Brush Script MT", Georgia, serif;
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: #4d0808;
+  text-shadow: 0 1px 0 rgba(255, 231, 197, 0.9), 0 0 18px rgba(140, 0, 0, 0.22);
+}
+
 .location-panel__body {
   min-height: 180px;
   border-radius: 16px;
   padding: 18px;
   border: 1px dashed rgba(89, 72, 59, 0.45);
   background: rgba(255, 251, 243, 0.75);
+}
+
+.character-profile--strahd {
+  position: relative;
+  padding: 18px;
+  border: 2px solid #250506;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(18, 6, 6, 0.96), rgba(84, 8, 10, 0.88) 44%, rgba(14, 9, 8, 0.98)),
+    #160606;
+  box-shadow:
+    0 0 0 4px rgba(130, 11, 13, 0.28),
+    inset 0 0 40px rgba(0, 0, 0, 0.42),
+    0 18px 34px rgba(18, 0, 0, 0.28);
+}
+
+.character-profile--strahd::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  pointer-events: none;
+  border: 1px solid rgba(255, 222, 181, 0.22);
+  border-radius: 12px;
+}
+
+.character-profile--strahd .location-panel__image {
+  border: 3px solid rgba(177, 22, 24, 0.82);
+  box-shadow:
+    0 0 0 2px rgba(10, 0, 0, 0.72),
+    0 0 28px rgba(190, 0, 0, 0.28);
+}
+
+.character-profile--strahd .location-panel__content {
+  color: #f8ead2;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
 }
 
 .location-panel__split {
@@ -858,6 +973,17 @@ body {
   width: 100%;
   max-width: 360px;
   margin-bottom: 0;
+}
+
+.location-panel__image--full {
+  width: 100%;
+  max-width: none;
+  margin: 18px 0 0;
+  object-fit: contain;
+}
+
+.location-panel__content--stacked-media {
+  width: 100%;
 }
 
 .location-panel__content p {
@@ -972,7 +1098,8 @@ body {
     padding: 16px;
   }
 
-  .dm-marker-item__toggle {
+  .dm-marker-item__toggle,
+  .dm-marker-item__delete {
     width: 100%;
     min-width: 0;
   }

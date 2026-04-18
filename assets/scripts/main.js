@@ -18,12 +18,14 @@ const dmMarkerTitleInput = document.getElementById("dm-marker-title");
 const dmMarkerDescriptionInput = document.getElementById("dm-marker-description");
 const dmMarkerTypeInput = document.getElementById("dm-marker-type");
 const dmMarkerVisibleInput = document.getElementById("dm-marker-visible");
+const dmMarkerImageFileInput = document.getElementById("dm-marker-image-file");
 const dmMarkerPlacementButton = document.getElementById("dm-marker-place");
 const dmMarkerStatus = document.getElementById("dm-marker-status");
 const presencePanel = document.getElementById("presence-panel");
 const presenceList = document.getElementById("presence-list");
 const displayNameForm = document.getElementById("display-name-form");
 const displayNameInput = document.getElementById("display-name-input");
+const displayNameVisibleInput = document.getElementById("display-name-visible");
 const displayNameSaveButton = document.getElementById("display-name-save");
 const displayNameStatus = document.getElementById("display-name-status");
 const viewIntro = document.getElementById("view-intro");
@@ -48,7 +50,7 @@ const VISIBILITY_STORAGE_VERSION_KEY = "barovia-marker-visibility-version";
 const VISIBILITY_STORAGE_VERSION = 2;
 const FIREBASE_PATH = "maps/barovia/markerVisibility";
 const CUSTOM_MARKERS_PATH = "maps/barovia/customMarkers";
-const PRESENCE_PATH = "presence";
+const PLAYER_DIRECTORY_PATH = "playerDirectory";
 const USERS_PATH = "users";
 const ROOT_MAP = {
   id: "barovia",
@@ -72,6 +74,7 @@ const DEFAULT_REVEALED_MARKERS = {
   "barovia:roadside-corpse": true,
   "barovia:fortunetellers-tent": true,
   "barovia:village-of-barovia": true,
+  "barovia:strahd-portrait": true,
   "village-of-barovia:bildraths-mercantile": true,
   "village-of-barovia:blood-on-the-vine-tavern": true,
   "village-of-barovia:mad-marys-townhouse": true,
@@ -92,11 +95,9 @@ let firebaseAuth = null;
 let firebaseDatabase = null;
 let databaseRef = null;
 let customMarkersRef = null;
-let presenceRef = null;
-let connectedRef = null;
-let presenceConnected = false;
-let currentPresenceUserRef = null;
-let currentPresenceConnectionRef = null;
+let playerDirectoryRef = null;
+let playerDirectoryConnected = false;
+let currentPlayerDirectoryRef = null;
 let firebaseReady = false;
 let firebaseSyncStarted = false;
 let currentUser = null;
@@ -275,6 +276,37 @@ function isValidDisplayName(value) {
   return trimmed.length >= 1 && trimmed.length <= 24;
 }
 
+function normalizeImageFileName(value) {
+  return String(value || "").trim().replaceAll("\\", "/").split("/").pop();
+}
+
+function getImagePathFromFileName(fileName) {
+  const normalizedFileName = normalizeImageFileName(fileName);
+  return normalizedFileName ? `assets/images/${encodeURIComponent(normalizedFileName)}` : "";
+}
+
+function isSafeImageFileName(fileName) {
+  const normalizedFileName = normalizeImageFileName(fileName);
+  return (
+    normalizedFileName.length > 0 &&
+    normalizedFileName.length <= 120 &&
+    /\.(avif|gif|jpe?g|png|webp)$/i.test(normalizedFileName)
+  );
+}
+
+async function imageExistsAtPath(imagePath) {
+  try {
+    const response = await fetch(imagePath, {
+      method: "HEAD",
+      cache: "no-store"
+    });
+    return response.ok;
+  } catch (error) {
+    console.warn("Unable to verify marker image.", error);
+    return false;
+  }
+}
+
 function setPlacementMode(isActive) {
   placementModeActive = isActive;
 
@@ -303,9 +335,25 @@ function renderInlineMarkerContent(marker) {
 
   const description = marker.dataset.inlineDescription;
   const title = marker.dataset.locationName || "Location";
+  const imagePath = marker.dataset.imageSrc || "";
 
-  if (!description) {
+  if (!description && !imagePath) {
     locationPanelBody.innerHTML = '<p class="location-panel__status">No notes have been added for this marker yet.</p>';
+    return;
+  }
+
+  if (imagePath) {
+    locationPanelBody.innerHTML = `
+      <div class="location-panel__content location-panel__content--stacked-media">
+        <p><strong>${escapeHtml(title)}</strong></p>
+        ${description ? `<p>${escapeHtml(description)}</p>` : ""}
+        <img
+          src="${escapeHtml(imagePath)}"
+          alt="${escapeHtml(title)}"
+          class="location-panel__image location-panel__image--full"
+        >
+      </div>
+    `;
     return;
   }
 
@@ -349,6 +397,7 @@ function attachMarkerClickHandler(marker) {
         : "Selected Location";
     }
     locationTitle.textContent = marker.dataset.locationName || (isPortraitMarker(marker) ? "Portrait" : "Location");
+    locationTitle.classList.toggle("location-panel__title--strahd", marker.dataset.locationId === "strahd-portrait");
     locationPanelBody.innerHTML = '<p class="location-panel__status">Loading...</p>';
     locationPanel.hidden = false;
     locationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -439,6 +488,7 @@ function renderCustomMarkers() {
     marker.dataset.locationName = markerRecord.title || "Custom Marker";
     marker.dataset.locationType = markerRecord.type || "location";
     marker.dataset.inlineDescription = markerRecord.description || "";
+    marker.dataset.imageSrc = markerRecord.imagePath || "";
     marker.setAttribute("aria-controls", "location-panel");
     marker.setAttribute("aria-label", `Open details for ${markerRecord.title || "custom marker"}`);
     mapStage?.append(marker);
@@ -457,46 +507,36 @@ function renderPresenceList(entries) {
     return;
   }
 
-  const onlinePlayers = entries
-    .filter(([, entry]) => entry && entry.role === "player" && entry.connections && Object.keys(entry.connections).length > 0)
+  const visiblePlayers = entries
+    .filter(([, entry]) => entry && entry.role === "player" && entry.showInPlayerList !== false)
     .sort((a, b) => String(a[1].displayName || a[1].username || "").localeCompare(String(b[1].displayName || b[1].username || "")));
 
   presencePanel.hidden = false;
 
-  if (onlinePlayers.length === 0) {
-    presenceList.innerHTML = '<p class="location-panel__status">No players are currently online.</p>';
+  if (visiblePlayers.length === 0) {
+    presenceList.innerHTML = '<p class="location-panel__status">No registered players are currently visible.</p>';
     return;
   }
 
-  presenceList.innerHTML = onlinePlayers.map(([, entry]) => `
+  presenceList.innerHTML = visiblePlayers.map(([, entry]) => `
     <article class="presence-item">
       <div>
         <p class="presence-item__name">${escapeHtml(entry.displayName || entry.username || "Unknown player")}</p>
-        <p class="presence-item__meta">Joined from ${escapeHtml(entry.view || "player")} view</p>
+        <p class="presence-item__meta">Registered player</p>
       </div>
-      <p class="presence-item__meta">Online</p>
+      <p class="presence-item__meta">${entry.lastUpdated ? "Listed" : "Ready"}</p>
     </article>
   `).join("");
 }
 
 function stopPresenceSync() {
-  if (currentPresenceConnectionRef) {
-    currentPresenceConnectionRef.remove().catch(() => {});
+  if (playerDirectoryRef) {
+    playerDirectoryRef.off();
   }
 
-  if (connectedRef) {
-    connectedRef.off();
-  }
-
-  if (presenceRef) {
-    presenceRef.off();
-  }
-
-  connectedRef = null;
-  presenceRef = null;
-  presenceConnected = false;
-  currentPresenceUserRef = null;
-  currentPresenceConnectionRef = null;
+  playerDirectoryRef = null;
+  playerDirectoryConnected = false;
+  currentPlayerDirectoryRef = null;
 
   if (presencePanel) {
     presencePanel.hidden = true;
@@ -508,43 +548,41 @@ function stopPresenceSync() {
 }
 
 function startPresenceSync() {
-  if (!firebaseDatabase || !currentUser || !currentUserProfile || presenceConnected) {
+  if (!firebaseDatabase || !currentUser || !currentUserProfile || playerDirectoryConnected) {
     return;
   }
 
-  presenceRef = firebaseDatabase.ref(PRESENCE_PATH);
-  connectedRef = firebaseDatabase.ref(".info/connected");
-  presenceConnected = true;
+  playerDirectoryRef = firebaseDatabase.ref(PLAYER_DIRECTORY_PATH);
+  currentPlayerDirectoryRef = playerDirectoryRef.child(currentUser.uid);
+  playerDirectoryConnected = true;
 
-  connectedRef.on("value", async (snapshot) => {
-    if (!snapshot.val() || !presenceRef || !currentUser || currentPresenceConnectionRef) {
-      return;
-    }
-
-    currentPresenceUserRef = presenceRef.child(currentUser.uid);
-    currentPresenceConnectionRef = currentPresenceUserRef.child("connections").push();
-    currentPresenceConnectionRef.onDisconnect().remove();
-
-    await currentPresenceUserRef.update({
-      username: currentUserProfile.username || getDisplayName(),
-      displayName: getDisplayName(),
-      role: currentUserProfile.role || "player",
-      view: viewMode,
-      lastSeen: window.firebase.database.ServerValue.TIMESTAMP
-    });
-
-    await currentPresenceConnectionRef.set(true);
+  syncCurrentPlayerDirectoryProfile().catch((error) => {
+    console.warn("Unable to update player directory profile.", error);
   });
 
-  presenceRef.on("value", (snapshot) => {
+  playerDirectoryRef.on("value", (snapshot) => {
     const data = snapshot.val();
     const entries = data && typeof data === "object" ? Object.entries(data) : [];
     renderPresenceList(entries);
   }, () => {
     if (presenceList) {
       presencePanel.hidden = false;
-      presenceList.innerHTML = '<p class="location-panel__status">Player presence could not be loaded.</p>';
+      presenceList.innerHTML = '<p class="location-panel__status">Player list could not be loaded.</p>';
     }
+  });
+}
+
+async function syncCurrentPlayerDirectoryProfile() {
+  if (!currentPlayerDirectoryRef || !currentUser || !currentUserProfile || currentUserProfile.role !== "player") {
+    return;
+  }
+
+  await currentPlayerDirectoryRef.update({
+    username: currentUserProfile.username || "",
+    displayName: getDisplayName(),
+    role: currentUserProfile.role || "player",
+    showInPlayerList: currentUserProfile.showInPlayerList !== false,
+    lastUpdated: window.firebase.database.ServerValue.TIMESTAMP
   });
 }
 
@@ -680,15 +718,17 @@ async function ensureUserProfile(user, username) {
 
   const userRef = firebaseDatabase.ref(`${USERS_PATH}/${user.uid}`);
   const now = new Date().toISOString();
+  let existingProfile = null;
   let nextProfile = null;
 
   try {
     const snapshot = await userRef.once("value");
-    const existingProfile = snapshot.val();
+    existingProfile = snapshot.val();
 
     nextProfile = {
       username: username || existingProfile?.username || user.displayName || user.email?.split("@")[0] || "player",
       displayName: existingProfile?.displayName || existingProfile?.username || username || user.displayName || user.email?.split("@")[0] || "player",
+      showInPlayerList: existingProfile?.showInPlayerList ?? true,
       role: existingProfile?.role || "player",
       createdAt: existingProfile?.createdAt || now,
       lastLoginAt: now
@@ -703,6 +743,9 @@ async function ensureUserProfile(user, username) {
     return nextProfile;
   } catch (error) {
     console.warn("Unable to ensure user profile.", error);
+    if (existingProfile && typeof existingProfile === "object") {
+      return existingProfile;
+    }
     throw error;
   }
 }
@@ -777,6 +820,10 @@ function updateSessionPanel() {
 
   if (displayNameInput && viewMode === "player") {
     displayNameInput.value = getDisplayName();
+  }
+
+  if (displayNameVisibleInput && viewMode === "player") {
+    displayNameVisibleInput.checked = currentUserProfile?.showInPlayerList !== false;
   }
 
   if (dmLink) {
@@ -889,6 +936,18 @@ function createDmControlItem(marker, container) {
 
   label.append(title, meta);
   item.append(label, toggle);
+
+  if (marker.classList.contains("map-marker--custom")) {
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "dm-marker-item__delete";
+    removeButton.textContent = "Delete";
+    removeButton.addEventListener("click", () => {
+      deleteCustomMarker(marker);
+    });
+    item.append(removeButton);
+  }
+
   container.append(item);
 
   syncDmControl(marker, container);
@@ -1120,10 +1179,25 @@ async function createCustomMarkerAtPosition(x, y) {
   const description = dmMarkerDescriptionInput?.value.trim() || "";
   const markerType = dmMarkerTypeInput?.value || "location";
   const visible = dmMarkerVisibleInput?.checked ?? true;
+  const imageFileName = normalizeImageFileName(dmMarkerImageFileInput?.value || "");
+  const imagePath = getImagePathFromFileName(imageFileName);
 
   if (!title) {
     setDmMarkerStatus("Add a title before placing the marker.", "error");
     return;
+  }
+
+  if (imageFileName) {
+    if (!isSafeImageFileName(imageFileName)) {
+      setDmMarkerStatus("Use an image file name ending in .jpg, .jpeg, .png, .webp, .gif, or .avif.", "error");
+      return;
+    }
+
+    const imageExists = await imageExistsAtPath(imagePath);
+    if (!imageExists) {
+      setDmMarkerStatus(`Could not find "${imageFileName}" in assets/images. Upload it there first.`, "error");
+      return;
+    }
   }
 
   const markerRef = customMarkersRef.push();
@@ -1140,6 +1214,8 @@ async function createCustomMarkerAtPosition(x, y) {
     title,
     description,
     type: markerType,
+    imageFileName,
+    imagePath,
     x: Number(x.toFixed(2)),
     y: Number(y.toFixed(2)),
     visible,
@@ -1167,6 +1243,40 @@ async function createCustomMarkerAtPosition(x, y) {
   } catch (error) {
     console.error("Unable to create custom marker.", error);
     setDmMarkerStatus("Marker could not be saved. Check your Firebase rules.", "error");
+  }
+}
+
+async function deleteCustomMarker(marker) {
+  if (!firebaseDatabase || !customMarkersRef || !canAccessCurrentView() || viewMode !== "dm") {
+    return;
+  }
+
+  const markerId = marker.dataset.locationId;
+  const markerName = marker.dataset.locationName || "this marker";
+
+  if (!markerId || !marker.classList.contains("map-marker--custom")) {
+    return;
+  }
+
+  const shouldDelete = window.confirm(`Delete "${markerName}"? This cannot be undone.`);
+  if (!shouldDelete) {
+    return;
+  }
+
+  try {
+    await customMarkersRef.child(markerId).remove();
+    delete markerVisibility[getMarkerVisibilityKey(marker)];
+    saveMarkerVisibility();
+    broadcastVisibilityState();
+
+    if (locationPanel && locationTitle?.textContent === markerName) {
+      locationPanel.hidden = true;
+    }
+
+    setDmMarkerStatus(`Marker "${markerName}" deleted.`, "success");
+  } catch (error) {
+    console.error("Unable to delete custom marker.", error);
+    setDmMarkerStatus("Marker could not be deleted. Check your Firebase rules.", "error");
   }
 }
 
@@ -1346,28 +1456,26 @@ displayNameForm?.addEventListener("submit", async (event) => {
   }
 
   try {
+    const showInPlayerList = displayNameVisibleInput?.checked ?? true;
     await firebaseDatabase.ref(`${USERS_PATH}/${currentUser.uid}`).update({
       displayName: nextDisplayName,
+      showInPlayerList,
       lastLoginAt: new Date().toISOString()
     });
 
     currentUserProfile = {
       ...currentUserProfile,
-      displayName: nextDisplayName
+      displayName: nextDisplayName,
+      showInPlayerList
     };
 
-    if (currentPresenceUserRef) {
-      await currentPresenceUserRef.update({
-        displayName: nextDisplayName,
-        lastSeen: window.firebase.database.ServerValue.TIMESTAMP
-      });
-    }
+    await syncCurrentPlayerDirectoryProfile();
 
     updateSessionPanel();
-    setDisplayNameStatus("Display name updated.", "success");
+    setDisplayNameStatus("Player list settings updated.", "success");
   } catch (error) {
     console.error("Unable to update display name.", error);
-    setDisplayNameStatus("Display name could not be updated. Check your Firebase rules.", "error");
+    setDisplayNameStatus("Player list settings could not be updated. Check your Firebase rules.", "error");
   } finally {
     if (displayNameSaveButton) {
       displayNameSaveButton.disabled = false;
@@ -1400,8 +1508,8 @@ async function handleAuthStateChanged(user) {
     const fallbackUsername = normalizeUsername(
       user.displayName || user.email?.split("@")[0] || authUsernameInput?.value || ""
     );
-    await ensureUserProfile(user, fallbackUsername);
-    currentUserProfile = await loadUserProfile(user.uid);
+    currentUserProfile = await ensureUserProfile(user, fallbackUsername);
+    currentUserProfile = await loadUserProfile(user.uid) || currentUserProfile;
     if (authUsernameInput) {
       authUsernameInput.value = "";
     }
@@ -1410,7 +1518,10 @@ async function handleAuthStateChanged(user) {
     }
   } catch (error) {
     console.warn("Unable to finish loading the signed-in user profile.", error);
-    setAuthMessage("Signed in, but the user profile could not be loaded. Check Firebase rules.", "error");
+    currentUserProfile = await loadUserProfile(user.uid);
+    if (!currentUserProfile) {
+      setAuthMessage("Signed in, but the user profile could not be loaded. Check Firebase rules.", "error");
+    }
   }
 
   updateAuthCopy();

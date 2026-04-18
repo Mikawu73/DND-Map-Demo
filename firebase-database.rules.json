@@ -8,14 +8,40 @@
         },
         "customMarkers": {
           ".read": "auth != null",
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+          "$markerId": {
+            "imageFileName": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+            },
+            "imagePath": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^assets\\/images\\/[A-Za-z0-9._% -]+\\.(avif|gif|jpeg|jpg|png|webp)$/))"
+            }
+          }
         }
       }
     },
-    "presence": {
+    "playerDirectory": {
       ".read": "auth != null",
       "$uid": {
-        ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && auth.uid === $uid",
+        "username": {
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9._-]{3,24}$/)"
+        },
+        "displayName": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24"
+        },
+        "role": {
+          ".validate": "newData.val() === 'player'"
+        },
+        "showInPlayerList": {
+          ".validate": "newData.isBoolean()"
+        },
+        "lastUpdated": {
+          ".validate": "newData.isNumber()"
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     },
     "users": {
@@ -28,6 +54,9 @@
         "displayName": {
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24"
         },
+        "showInPlayerList": {
+          ".validate": "newData.isBoolean()"
+        },
         "role": {
           ".validate": "(data.exists() && newData.val() === data.val()) || (!data.exists() && newData.val() === 'player')"
         },
@@ -38,7 +67,7 @@
           ".validate": "newData.isString()"
         },
         "$other": {
-          ".validate": false
+          ".validate": "data.exists() && newData.val() === data.val()"
         }
       }
     }
