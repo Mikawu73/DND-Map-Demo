@@ -14,7 +14,25 @@
               ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
             },
             "imagePath": {
-              ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^assets\\/images\\/[A-Za-z0-9._% -]+\\.(avif|gif|jpeg|jpg|png|webp)$/))"
+              ".validate": "!newData.exists() || (newData.isString() && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)))"
+            },
+            "isMapMarker": {
+              ".validate": "!newData.exists() || newData.isBoolean()"
+            },
+            "mapImageFileName": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+            },
+            "mapSrc": {
+              ".validate": "!newData.exists() || (newData.isString() && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)))"
+            },
+            "targetMapId": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)"
+            },
+            "targetMapTitle": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)"
+            },
+            "mapAlt": {
+              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
             }
           }
         }

@@ -19,6 +19,10 @@ const dmMarkerDescriptionInput = document.getElementById("dm-marker-description"
 const dmMarkerTypeInput = document.getElementById("dm-marker-type");
 const dmMarkerVisibleInput = document.getElementById("dm-marker-visible");
 const dmMarkerImageFileInput = document.getElementById("dm-marker-image-file");
+const dmMarkerIsMapInput = document.getElementById("dm-marker-is-map");
+const dmMarkerMapFields = document.getElementById("dm-marker-map-fields");
+const dmMarkerMapTitleInput = document.getElementById("dm-marker-map-title");
+const dmMarkerMapImageFileInput = document.getElementById("dm-marker-map-image-file");
 const dmMarkerPlacementButton = document.getElementById("dm-marker-place");
 const dmMarkerStatus = document.getElementById("dm-marker-status");
 const presencePanel = document.getElementById("presence-panel");
@@ -88,6 +92,7 @@ const DEFAULT_REVEALED_MARKERS = {
 };
 const markerVisibility = loadMarkerVisibility();
 const mapHistory = [{ ...ROOT_MAP }];
+const IMAGE_FILE_EXTENSION_PATTERN = /\.(avif|gif|jpe?g|png|webp)$/i;
 
 let currentMap = { ...ROOT_MAP };
 let firebaseApp = null;
@@ -285,12 +290,21 @@ function getImagePathFromFileName(fileName) {
   return normalizedFileName ? `assets/images/${encodeURIComponent(normalizedFileName)}` : "";
 }
 
+function getMapIdFromTitle(title) {
+  return String(title || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
 function isSafeImageFileName(fileName) {
   const normalizedFileName = normalizeImageFileName(fileName);
   return (
     normalizedFileName.length > 0 &&
     normalizedFileName.length <= 120 &&
-    /\.(avif|gif|jpe?g|png|webp)$/i.test(normalizedFileName)
+    IMAGE_FILE_EXTENSION_PATTERN.test(normalizedFileName)
   );
 }
 
@@ -307,12 +321,100 @@ async function imageExistsAtPath(imagePath) {
   }
 }
 
+async function loadImageFileOptions() {
+  if ((!dmMarkerImageFileInput && !dmMarkerMapImageFileInput) || viewMode !== "dm") {
+    return;
+  }
+
+  try {
+    const imageNames = await fetchImageFileNames();
+    populateImageSelect(dmMarkerImageFileInput, imageNames, "No image");
+    populateImageSelect(dmMarkerMapImageFileInput, imageNames, "Choose map image");
+  } catch (error) {
+    console.warn("Unable to load image file options.", error);
+  }
+}
+
+async function fetchImageFileNames() {
+  try {
+    const response = await fetch("/api/images", { cache: "no-store" });
+    if (response.ok) {
+      const payload = await response.json();
+      if (Array.isArray(payload.images)) {
+        return payload.images;
+      }
+    }
+  } catch (error) {
+    console.warn("Unable to load image list from API.", error);
+  }
+
+  const response = await fetch("assets/images/", { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Failed to load image directory: ${response.status}`);
+  }
+
+  const html = await response.text();
+  const documentFragment = new DOMParser().parseFromString(html, "text/html");
+  const imageNames = Array.from(documentFragment.querySelectorAll("a"))
+    .map((link) => {
+      const href = link.getAttribute("href") || "";
+      const path = new URL(href, response.url).pathname;
+      return decodeURIComponent(path.split("/").pop() || "");
+    })
+    .filter((fileName) => fileName && IMAGE_FILE_EXTENSION_PATTERN.test(fileName));
+
+  return [...new Set(imageNames)].sort((left, right) => left.localeCompare(right));
+}
+
+function populateImageSelect(select, imageNames, emptyLabel) {
+  if (!select) {
+    return;
+  }
+
+  const selectedValue = select.value;
+  select.innerHTML = [
+    `<option value="">${escapeHtml(emptyLabel)}</option>`,
+    ...imageNames.map((imageName) => `<option value="${escapeHtml(imageName)}">${escapeHtml(imageName)}</option>`)
+  ].join("");
+
+  if (selectedValue && imageNames.includes(selectedValue)) {
+    select.value = selectedValue;
+  }
+}
+
+function syncMapMarkerFields() {
+  if (!dmMarkerIsMapInput || !dmMarkerMapFields) {
+    return;
+  }
+
+  const isNpcMarker = dmMarkerTypeInput?.value === "npc";
+  const isMapMarker = dmMarkerIsMapInput.checked && !isNpcMarker;
+  dmMarkerIsMapInput.disabled = isNpcMarker;
+  dmMarkerMapFields.hidden = !isMapMarker;
+
+  if (dmMarkerMapImageFileInput) {
+    dmMarkerMapImageFileInput.required = isMapMarker;
+  }
+
+  if (dmMarkerPlacementButton) {
+    dmMarkerPlacementButton.textContent = isNpcMarker
+      ? "Create NPC"
+      : placementModeActive
+        ? "Cancel Placement"
+        : "Place Marker On Map";
+  }
+}
+
 function setPlacementMode(isActive) {
   placementModeActive = isActive;
 
   if (dmMarkerPlacementButton) {
     dmMarkerPlacementButton.setAttribute("aria-pressed", String(isActive));
-    dmMarkerPlacementButton.textContent = isActive ? "Cancel Placement" : "Place Marker On Map";
+    dmMarkerPlacementButton.textContent = dmMarkerTypeInput?.value === "npc"
+      ? "Create NPC"
+      : isActive
+        ? "Cancel Placement"
+        : "Place Marker On Map";
   }
 
   mapStage?.classList.toggle("map-stage--placement-mode", isActive);
@@ -402,7 +504,7 @@ function attachMarkerClickHandler(marker) {
     locationPanel.hidden = false;
     locationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 
-    if (marker.dataset.inlineDescription) {
+    if (marker.dataset.inlineDescription || marker.dataset.imageSrc) {
       renderInlineMarkerContent(marker);
       return;
     }
@@ -467,14 +569,23 @@ function applyCustomMarkersSnapshot(nextMarkers) {
 }
 
 function renderCustomMarkers() {
-  for (const marker of Array.from(document.querySelectorAll(".map-marker--custom"))) {
+  for (const marker of Array.from(document.querySelectorAll(".map-marker--custom, .portrait-marker--custom"))) {
     marker.remove();
   }
 
-  markerButtons = markerButtons.filter((marker) => !marker.classList.contains("map-marker--custom"));
+  markerButtons = markerButtons.filter(
+    (marker) =>
+      !marker.classList.contains("map-marker--custom") &&
+      !marker.classList.contains("portrait-marker--custom")
+  );
 
   for (const markerRecord of Object.values(customMarkers)) {
     if (!markerRecord?.id || !markerRecord.mapId) {
+      continue;
+    }
+
+    if (markerRecord.type === "npc") {
+      renderCustomNpcMarker(markerRecord);
       continue;
     }
 
@@ -489,8 +600,17 @@ function renderCustomMarkers() {
     marker.dataset.locationType = markerRecord.type || "location";
     marker.dataset.inlineDescription = markerRecord.description || "";
     marker.dataset.imageSrc = markerRecord.imagePath || "";
+    marker.dataset.mapSrc = markerRecord.mapSrc || "";
+    marker.dataset.targetMapId = markerRecord.targetMapId || "";
+    marker.dataset.targetMapTitle = markerRecord.targetMapTitle || "";
+    marker.dataset.mapAlt = markerRecord.mapAlt || "";
     marker.setAttribute("aria-controls", "location-panel");
-    marker.setAttribute("aria-label", `Open details for ${markerRecord.title || "custom marker"}`);
+    marker.setAttribute(
+      "aria-label",
+      markerRecord.mapSrc
+        ? `Show the ${markerRecord.targetMapTitle || markerRecord.title || "custom"} map`
+        : `Open details for ${markerRecord.title || "custom marker"}`
+    );
     mapStage?.append(marker);
     registerMarkerElement(marker);
   }
@@ -500,6 +620,33 @@ function renderCustomMarkers() {
   if (viewMode === "dm" && canAccessCurrentView()) {
     renderDmControls();
   }
+}
+
+function renderCustomNpcMarker(markerRecord) {
+  const marker = document.createElement("button");
+  marker.type = "button";
+  marker.className = "portrait-marker portrait-marker--custom";
+  marker.dataset.mapId = markerRecord.mapId;
+  marker.dataset.locationId = markerRecord.id;
+  marker.dataset.locationName = markerRecord.title || "Custom NPC";
+  marker.dataset.locationType = "npc";
+  marker.dataset.inlineDescription = markerRecord.description || "";
+  marker.dataset.imageSrc = markerRecord.imagePath || "";
+  marker.setAttribute("aria-controls", "location-panel");
+  marker.setAttribute("aria-label", `Show NPC ${markerRecord.title || "custom NPC"}`);
+
+  if (markerRecord.imagePath) {
+    const image = document.createElement("img");
+    image.src = markerRecord.imagePath;
+    image.alt = markerRecord.title || "NPC portrait";
+    marker.append(image);
+  }
+
+  const label = document.createElement("span");
+  label.textContent = markerRecord.title || "Custom NPC";
+  marker.append(label);
+  portraitRail?.append(marker);
+  registerMarkerElement(marker);
 }
 
 function renderPresenceList(entries) {
@@ -903,6 +1050,8 @@ function formatMarkerType(type) {
   switch (type) {
     case "information":
       return "Information";
+    case "npc":
+      return "NPC";
     case "portrait":
       return "Portrait";
     default:
@@ -924,7 +1073,8 @@ function createDmControlItem(marker, container) {
   const meta = document.createElement("p");
   meta.className = "dm-marker-item__meta";
   const markerType = marker.dataset.locationType || "location";
-  meta.textContent = `${formatMarkerType(markerType)} - ${marker.dataset.locationId || ""}`;
+  const markerKind = marker.dataset.mapSrc ? "Big Map" : formatMarkerType(markerType);
+  meta.textContent = `${markerKind} - ${marker.dataset.locationId || ""}`;
 
   const toggle = document.createElement("button");
   toggle.type = "button";
@@ -937,7 +1087,10 @@ function createDmControlItem(marker, container) {
   label.append(title, meta);
   item.append(label, toggle);
 
-  if (marker.classList.contains("map-marker--custom")) {
+  if (
+    marker.classList.contains("map-marker--custom") ||
+    marker.classList.contains("portrait-marker--custom")
+  ) {
     const removeButton = document.createElement("button");
     removeButton.type = "button";
     removeButton.className = "dm-marker-item__delete";
@@ -1028,13 +1181,22 @@ function syncPortraitRailHeight() {
   portraitRail.style.maxHeight = `${mapStage.offsetHeight}px`;
 }
 
+function getMapReturnTitle(map) {
+  const title = map?.title || "previous map";
+  return title.replace(/^Map of\s+/i, "").trim() || title;
+}
+
 function updateMapHeader() {
   if (mapTitle) {
     mapTitle.textContent = currentMap.title;
   }
 
   if (mapReturn) {
-    mapReturn.hidden = currentMap.id === ROOT_MAP.id;
+    const previousMap = mapHistory.length > 1 ? mapHistory[mapHistory.length - 2] : null;
+    mapReturn.hidden = currentMap.id === ROOT_MAP.id || !previousMap;
+    if (previousMap) {
+      mapReturn.textContent = `Return to ${getMapReturnTitle(previousMap)}`;
+    }
   }
 }
 
@@ -1170,33 +1332,63 @@ function clampPercentage(value) {
   return Math.min(99.5, Math.max(0.5, value));
 }
 
-async function createCustomMarkerAtPosition(x, y) {
-  if (!firebaseDatabase || !customMarkersRef || !canAccessCurrentView() || viewMode !== "dm") {
-    return;
-  }
-
+async function buildCustomMarkerRecord(position = null) {
   const title = dmMarkerTitleInput?.value.trim() || "";
   const description = dmMarkerDescriptionInput?.value.trim() || "";
   const markerType = dmMarkerTypeInput?.value || "location";
   const visible = dmMarkerVisibleInput?.checked ?? true;
   const imageFileName = normalizeImageFileName(dmMarkerImageFileInput?.value || "");
   const imagePath = getImagePathFromFileName(imageFileName);
+  const isNpcMarker = markerType === "npc";
+  const isMapMarker = (dmMarkerIsMapInput?.checked ?? false) && !isNpcMarker;
+  const targetMapTitle = (dmMarkerMapTitleInput?.value.trim() || title).trim();
+  const mapImageFileName = normalizeImageFileName(dmMarkerMapImageFileInput?.value || "");
+  const mapSrc = getImagePathFromFileName(mapImageFileName);
+  const targetMapId = getMapIdFromTitle(targetMapTitle);
 
   if (!title) {
-    setDmMarkerStatus("Add a title before placing the marker.", "error");
-    return;
+    setDmMarkerStatus(isNpcMarker ? "Add a title before creating the NPC." : "Add a title before placing the marker.", "error");
+    return null;
+  }
+
+  if (!isNpcMarker && !position) {
+    setDmMarkerStatus("Click the map to choose where this marker should appear.", "error");
+    return null;
   }
 
   if (imageFileName) {
     if (!isSafeImageFileName(imageFileName)) {
       setDmMarkerStatus("Use an image file name ending in .jpg, .jpeg, .png, .webp, .gif, or .avif.", "error");
-      return;
+      return null;
     }
 
     const imageExists = await imageExistsAtPath(imagePath);
     if (!imageExists) {
       setDmMarkerStatus(`Could not find "${imageFileName}" in assets/images. Upload it there first.`, "error");
-      return;
+      return null;
+    }
+  }
+
+  if (isMapMarker) {
+    if (!targetMapTitle) {
+      setDmMarkerStatus("Add a map name before placing a big map marker.", "error");
+      return null;
+    }
+
+    if (!targetMapId) {
+      setDmMarkerStatus("Use at least one letter or number in the map name.", "error");
+      return null;
+    }
+
+    if (!isSafeImageFileName(mapImageFileName)) {
+      setDmMarkerStatus("Use a map image file name ending in .jpg, .jpeg, .png, .webp, .gif, or .avif.", "error");
+      return null;
+    }
+
+    const mapImageExists = await imageExistsAtPath(mapSrc);
+    if (!mapImageExists) {
+      setDmMarkerStatus(`Could not find "${mapImageFileName}" in assets/images. Upload it there first.`, "error");
+      return null;
     }
   }
 
@@ -1205,7 +1397,7 @@ async function createCustomMarkerAtPosition(x, y) {
 
   if (!markerId) {
     setDmMarkerStatus("Firebase did not return a marker id.", "error");
-    return;
+    return null;
   }
 
   const markerRecord = {
@@ -1216,34 +1408,81 @@ async function createCustomMarkerAtPosition(x, y) {
     type: markerType,
     imageFileName,
     imagePath,
-    x: Number(x.toFixed(2)),
-    y: Number(y.toFixed(2)),
+    isMapMarker,
+    mapImageFileName: isMapMarker ? mapImageFileName : "",
+    mapSrc: isMapMarker ? mapSrc : "",
+    targetMapId: isMapMarker ? targetMapId : "",
+    targetMapTitle: isMapMarker ? targetMapTitle : "",
+    mapAlt: isMapMarker ? `Map of ${targetMapTitle}` : "",
     visible,
     createdAt: new Date().toISOString(),
     createdBy: currentUser?.uid || ""
   };
 
+  if (position) {
+    markerRecord.x = Number(position.x.toFixed(2));
+    markerRecord.y = Number(position.y.toFixed(2));
+  }
+
+  return { markerRef, markerRecord };
+}
+
+function resetDmMarkerForm() {
+  if (!dmCreatorForm) {
+    return;
+  }
+
+  dmCreatorForm.reset();
+  if (dmMarkerVisibleInput) {
+    dmMarkerVisibleInput.checked = true;
+  }
+  if (dmMarkerTypeInput) {
+    dmMarkerTypeInput.value = "location";
+  }
+  syncMapMarkerFields();
+}
+
+async function saveCustomMarker(markerRef, markerRecord, successMessage) {
   try {
     await markerRef.set(markerRecord);
-    markerVisibility[getCustomMarkerVisibilityKey(markerRecord)] = visible;
+    markerVisibility[getCustomMarkerVisibilityKey(markerRecord)] = markerRecord.visible !== false;
     saveMarkerVisibility();
     broadcastVisibilityState();
     setPlacementMode(false);
-    setDmMarkerStatus(`Marker "${title}" added to ${currentMap.title}.`, "success");
-
-    if (dmCreatorForm) {
-      dmCreatorForm.reset();
-      if (dmMarkerVisibleInput) {
-        dmMarkerVisibleInput.checked = true;
-      }
-      if (dmMarkerTypeInput) {
-        dmMarkerTypeInput.value = "location";
-      }
-    }
+    setDmMarkerStatus(successMessage, "success");
+    resetDmMarkerForm();
   } catch (error) {
     console.error("Unable to create custom marker.", error);
     setDmMarkerStatus("Marker could not be saved. Check your Firebase rules.", "error");
   }
+}
+
+async function createCustomNpcMarker() {
+  if (!firebaseDatabase || !customMarkersRef || !canAccessCurrentView() || viewMode !== "dm") {
+    return;
+  }
+
+  const result = await buildCustomMarkerRecord();
+  if (!result) {
+    return;
+  }
+
+  const { markerRef, markerRecord } = result;
+  await saveCustomMarker(markerRef, markerRecord, `NPC "${markerRecord.title}" added to ${currentMap.title}.`);
+}
+
+async function createCustomMarkerAtPosition(x, y) {
+  if (!firebaseDatabase || !customMarkersRef || !canAccessCurrentView() || viewMode !== "dm") {
+    return;
+  }
+
+  const result = await buildCustomMarkerRecord({ x, y });
+  if (!result) {
+    return;
+  }
+
+  const { markerRef, markerRecord } = result;
+  await saveCustomMarker(markerRef, markerRecord, `Marker "${markerRecord.title}" added to ${currentMap.title}.`);
 }
 
 async function deleteCustomMarker(marker) {
@@ -1254,7 +1493,13 @@ async function deleteCustomMarker(marker) {
   const markerId = marker.dataset.locationId;
   const markerName = marker.dataset.locationName || "this marker";
 
-  if (!markerId || !marker.classList.contains("map-marker--custom")) {
+  if (
+    !markerId ||
+    (
+      !marker.classList.contains("map-marker--custom") &&
+      !marker.classList.contains("portrait-marker--custom")
+    )
+  ) {
     return;
   }
 
@@ -1285,6 +1530,11 @@ dmMarkerPlacementButton?.addEventListener("click", () => {
     return;
   }
 
+  if (dmMarkerTypeInput?.value === "npc") {
+    createCustomNpcMarker();
+    return;
+  }
+
   const title = dmMarkerTitleInput?.value.trim() || "";
   if (!title) {
     setDmMarkerStatus("Add a title before entering placement mode.", "error");
@@ -1293,6 +1543,18 @@ dmMarkerPlacementButton?.addEventListener("click", () => {
 
   setPlacementMode(!placementModeActive);
 });
+
+dmMarkerIsMapInput?.addEventListener("change", syncMapMarkerFields);
+dmMarkerTypeInput?.addEventListener("change", () => {
+  if (dmMarkerTypeInput.value === "npc") {
+    setPlacementMode(false);
+  }
+  syncMapMarkerFields();
+});
+dmMarkerImageFileInput?.addEventListener("focus", loadImageFileOptions);
+dmMarkerImageFileInput?.addEventListener("pointerdown", loadImageFileOptions);
+dmMarkerMapImageFileInput?.addEventListener("focus", loadImageFileOptions);
+dmMarkerMapImageFileInput?.addEventListener("pointerdown", loadImageFileOptions);
 
 mapStage?.addEventListener("click", async (event) => {
   if (!placementModeActive || viewMode !== "dm" || !canAccessCurrentView() || !mapImage) {
@@ -1553,6 +1815,8 @@ function initializeAuth() {
 window.addEventListener("resize", syncPortraitRailHeight);
 
 registerExistingMarkers();
+syncMapMarkerFields();
+loadImageFileOptions();
 applyViewMode();
 updateMapHeader();
 applyAllMarkerStates();

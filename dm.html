@@ -76,7 +76,6 @@
           <div class="map-legend__items">
             <div class="map-legend__item"><span class="map-legend__swatch map-legend__swatch--location" aria-hidden="true"></span><span>Location</span></div>
             <div class="map-legend__item"><span class="map-legend__swatch map-legend__swatch--information" aria-hidden="true"></span><span>Information</span></div>
-            <div class="map-legend__item"><span class="map-legend__swatch map-legend__swatch--portrait" aria-hidden="true"></span><span>Portrait</span></div>
           </div>
         </section>
 
@@ -129,12 +128,93 @@
             <select id="dm-marker-type">
               <option value="location">Location</option>
               <option value="information">Information</option>
+              <option value="npc">NPC</option>
             </select>
           </label>
           <label class="dm-creator__field dm-creator__field--full">
             <span>Image File Name</span>
-            <input id="dm-marker-image-file" type="text" maxlength="120" placeholder="Optional, e.g. Tser Pool Encampment.jpg">
+            <select id="dm-marker-image-file">
+              <option value="">No image</option>
+              <option value="Arrigal.jpg">Arrigal.jpg</option>
+              <option value="Card Layout.jpg">Card Layout.jpg</option>
+              <option value="Count Strahd von Zarovich.jpg">Count Strahd von Zarovich.jpg</option>
+              <option value="Donavich.jpg">Donavich.jpg</option>
+              <option value="Doru.jpg">Doru.jpg</option>
+              <option value="Fiona Wachter and Majesto.jpg">Fiona Wachter and Majesto.jpg</option>
+              <option value="Gates of Barovia.jpg">Gates of Barovia.jpg</option>
+              <option value="Henrik van der Voort.jpg">Henrik van der Voort.jpg</option>
+              <option value="Ireena Kolyana.jpg">Ireena Kolyana.jpg</option>
+              <option value="Ismark-the-Lesser.jpg">Ismark-the-Lesser.jpg</option>
+              <option value="Kasimir, Patrina, and Izek.jpg">Kasimir, Patrina, and Izek.jpg</option>
+              <option value="Kolyan's Letter.png">Kolyan's Letter.png</option>
+              <option value="Luvash.jpg">Luvash.jpg</option>
+              <option value="Mad Mary.jpg">Mad Mary.jpg</option>
+              <option value="Map - Barovia.jpg">Map - Barovia.jpg</option>
+              <option value="Map - Blue Water Inn.jpg">Map - Blue Water Inn.jpg</option>
+              <option value="Map - Burgomaster's Mansion.jpg">Map - Burgomaster's Mansion.jpg</option>
+              <option value="Map - Church.jpg">Map - Church.jpg</option>
+              <option value="Map - Coffin Maker's Shop.jpg">Map - Coffin Maker's Shop.jpg</option>
+              <option value="Map - Tser Pool Encampment.jpg">Map - Tser Pool Encampment.jpg</option>
+              <option value="Map - Vallaki.jpg">Map - Vallaki.jpg</option>
+              <option value="Map - Village of Barovia.jpg">Map - Village of Barovia.jpg</option>
+              <option value="Map - Vistani Camp.jpg">Map - Vistani Camp.jpg</option>
+              <option value="Map - Wachterhaus.jpg">Map - Wachterhaus.jpg</option>
+              <option value="Morgantha.jpg">Morgantha.jpg</option>
+              <option value="parriwimple.jpg">parriwimple.jpg</option>
+              <option value="Rictavio.jpg">Rictavio.jpg</option>
+              <option value="Rictavio's Carnival Wagon.jpg">Rictavio's Carnival Wagon.jpg</option>
+              <option value="Szoldar Szoldarovich.jpg">Szoldar Szoldarovich.jpg</option>
+              <option value="The Baroness and the Baron.jpg">The Baroness and the Baron.jpg</option>
+              <option value="Yevgeni Krushkin.jpg">Yevgeni Krushkin.jpg</option>
+            </select>
           </label>
+          <label class="dm-creator__check">
+            <input id="dm-marker-is-map" type="checkbox">
+            <span>Big map marker</span>
+          </label>
+          <div id="dm-marker-map-fields" class="dm-creator__map-fields" hidden>
+            <label class="dm-creator__field">
+              <span>Map Name</span>
+              <input id="dm-marker-map-title" type="text" maxlength="80" placeholder="Optional, defaults to title">
+            </label>
+            <label class="dm-creator__field">
+              <span>Map Image File Name</span>
+              <select id="dm-marker-map-image-file">
+                <option value="">Choose map image</option>
+                <option value="Arrigal.jpg">Arrigal.jpg</option>
+                <option value="Card Layout.jpg">Card Layout.jpg</option>
+                <option value="Count Strahd von Zarovich.jpg">Count Strahd von Zarovich.jpg</option>
+                <option value="Donavich.jpg">Donavich.jpg</option>
+                <option value="Doru.jpg">Doru.jpg</option>
+                <option value="Fiona Wachter and Majesto.jpg">Fiona Wachter and Majesto.jpg</option>
+                <option value="Gates of Barovia.jpg">Gates of Barovia.jpg</option>
+                <option value="Henrik van der Voort.jpg">Henrik van der Voort.jpg</option>
+                <option value="Ireena Kolyana.jpg">Ireena Kolyana.jpg</option>
+                <option value="Ismark-the-Lesser.jpg">Ismark-the-Lesser.jpg</option>
+                <option value="Kasimir, Patrina, and Izek.jpg">Kasimir, Patrina, and Izek.jpg</option>
+                <option value="Kolyan's Letter.png">Kolyan's Letter.png</option>
+                <option value="Luvash.jpg">Luvash.jpg</option>
+                <option value="Mad Mary.jpg">Mad Mary.jpg</option>
+                <option value="Map - Barovia.jpg">Map - Barovia.jpg</option>
+                <option value="Map - Blue Water Inn.jpg">Map - Blue Water Inn.jpg</option>
+                <option value="Map - Burgomaster's Mansion.jpg">Map - Burgomaster's Mansion.jpg</option>
+                <option value="Map - Church.jpg">Map - Church.jpg</option>
+                <option value="Map - Coffin Maker's Shop.jpg">Map - Coffin Maker's Shop.jpg</option>
+                <option value="Map - Tser Pool Encampment.jpg">Map - Tser Pool Encampment.jpg</option>
+                <option value="Map - Vallaki.jpg">Map - Vallaki.jpg</option>
+                <option value="Map - Village of Barovia.jpg">Map - Village of Barovia.jpg</option>
+                <option value="Map - Vistani Camp.jpg">Map - Vistani Camp.jpg</option>
+                <option value="Map - Wachterhaus.jpg">Map - Wachterhaus.jpg</option>
+                <option value="Morgantha.jpg">Morgantha.jpg</option>
+                <option value="parriwimple.jpg">parriwimple.jpg</option>
+                <option value="Rictavio.jpg">Rictavio.jpg</option>
+                <option value="Rictavio's Carnival Wagon.jpg">Rictavio's Carnival Wagon.jpg</option>
+                <option value="Szoldar Szoldarovich.jpg">Szoldar Szoldarovich.jpg</option>
+                <option value="The Baroness and the Baron.jpg">The Baroness and the Baron.jpg</option>
+                <option value="Yevgeni Krushkin.jpg">Yevgeni Krushkin.jpg</option>
+              </select>
+            </label>
+          </div>
           <label class="dm-creator__field dm-creator__field--full">
             <span>Description</span>
             <textarea id="dm-marker-description" rows="4" placeholder="Add notes for players and yourself."></textarea>

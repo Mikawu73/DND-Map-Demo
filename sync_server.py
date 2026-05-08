@@ -164,6 +164,9 @@ class MapRequestHandler(SimpleHTTPRequestHandler):
         if self.headers.get("Upgrade", "").lower() == "websocket":
             self._handle_websocket()
             return
+        if urlparse(self.path).path == "/api/images":
+            self._handle_images_api()
+            return
         super().do_GET()
 
     def translate_path(self, path):
@@ -210,6 +213,24 @@ class MapRequestHandler(SimpleHTTPRequestHandler):
 
         client = WebSocketClient(self, self.server.sync_hub)
         client.run()
+
+    def _handle_images_api(self):
+        images_dir = ROOT / "assets" / "images"
+        image_names = []
+
+        if images_dir.is_dir():
+            image_names = sorted(
+                path.name
+                for path in images_dir.iterdir()
+                if path.is_file() and path.suffix.lower() in {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
+            )
+
+        body = json.dumps({"images": image_names}).encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
 
 class MapServer(ThreadingHTTPServer):
