@@ -9,6 +9,12 @@ const appSignoutButton = document.getElementById("app-signout");
 const mapStage = document.getElementById("map-stage");
 const mapLayout = document.querySelector(".map-layout");
 const mapImage = document.getElementById("barovia-map");
+const mapFrame = document.querySelector(".map-frame");
+const rootMapSetup = document.getElementById("root-map-setup");
+const rootMapForm = document.getElementById("root-map-form");
+const rootMapTitleInput = document.getElementById("root-map-title");
+const rootMapImageFileInput = document.getElementById("root-map-image-file");
+const rootMapStatus = document.getElementById("root-map-status");
 const portraitRail = document.getElementById("portrait-rail");
 const dmControls = document.getElementById("dm-controls");
 const dmLocationList = document.getElementById("dm-location-list");
@@ -48,14 +54,24 @@ const sessionPanel = document.getElementById("session-panel");
 const sessionSummary = document.getElementById("session-summary");
 const dmLink = document.getElementById("dm-link");
 const playerLink = document.getElementById("player-link");
+const campaignPanel = document.getElementById("campaign-panel");
+const campaignList = document.getElementById("campaign-list");
+const campaignAdmin = document.getElementById("campaign-admin");
+const campaignCreateForm = document.getElementById("campaign-create-form");
+const campaignNameInput = document.getElementById("campaign-name");
+const campaignInviteForm = document.getElementById("campaign-invite-form");
+const campaignInvitePlayerSelect = document.getElementById("campaign-invite-player");
+const campaignMembers = document.getElementById("campaign-members");
+const campaignMemberList = document.getElementById("campaign-member-list");
+const campaignSwitchButton = document.getElementById("campaign-switch");
 
 const VISIBILITY_STORAGE_KEY = "barovia-marker-visibility";
 const VISIBILITY_STORAGE_VERSION_KEY = "barovia-marker-visibility-version";
 const VISIBILITY_STORAGE_VERSION = 2;
-const FIREBASE_PATH = "maps/barovia/markerVisibility";
-const CUSTOM_MARKERS_PATH = "maps/barovia/customMarkers";
-const PLAYER_DIRECTORY_PATH = "playerDirectory";
 const USERS_PATH = "users";
+const USER_CAMPAIGNS_PATH = "userCampaigns";
+const USERNAME_DIRECTORY_PATH = "usernameDirectory";
+const LEGACY_CAMPAIGN_ID = "curse-of-strahd";
 const ROOT_MAP = {
   id: "barovia",
   src: "assets/images/Map%20-%20Barovia.jpg",
@@ -90,7 +106,7 @@ const DEFAULT_REVEALED_MARKERS = {
   "village-of-barovia:mad-mary-portrait": true,
   "village-of-barovia:parriwimple-portrait": true
 };
-const markerVisibility = loadMarkerVisibility();
+const markerVisibility = {};
 const mapHistory = [{ ...ROOT_MAP }];
 const IMAGE_FILE_EXTENSION_PATTERN = /\.(avif|gif|jpe?g|png|webp)$/i;
 
@@ -100,44 +116,78 @@ let firebaseAuth = null;
 let firebaseDatabase = null;
 let databaseRef = null;
 let customMarkersRef = null;
+let rootMapRef = null;
 let playerDirectoryRef = null;
 let playerDirectoryConnected = false;
 let currentPlayerDirectoryRef = null;
+let campaignMembershipsRef = null;
 let firebaseReady = false;
 let firebaseSyncStarted = false;
 let currentUser = null;
 let currentUserProfile = null;
-let unauthorizedRedirectTimer = null;
+let activeCampaignId = "";
+let campaignMemberships = {};
+let campaignPickerOpen = true;
+let campaignRootMap = null;
 let placementModeActive = false;
 const customMarkers = {};
 
+function normalizeCampaignId(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isValidCampaignId(value) {
+  return /^[a-z0-9-]{3,40}$/.test(value);
+}
+
+function createCampaignId(name) {
+  const slug = normalizeCampaignId(name)
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 24) || "campaign";
+  return `${slug}-${Date.now().toString(36)}`.slice(0, 40);
+}
+
+function getCurrentCampaignId() {
+  return activeCampaignId;
+}
+
+function getCampaignPath(suffix = "") {
+  const campaignId = getCurrentCampaignId();
+  return campaignId ? `campaigns/${campaignId}${suffix ? `/${suffix}` : ""}` : "";
+}
+
+function getVisibilityStorageKey(baseKey) {
+  return `${baseKey}:${getCurrentCampaignId() || "unassigned"}`;
+}
+
 function loadMarkerVisibility() {
   try {
-    const stored = window.localStorage.getItem(VISIBILITY_STORAGE_KEY);
+    const stored = window.localStorage.getItem(getVisibilityStorageKey(VISIBILITY_STORAGE_KEY));
     const parsed = stored ? JSON.parse(stored) : {};
     const storedVersion = Number(
-      window.localStorage.getItem(VISIBILITY_STORAGE_VERSION_KEY) || "0"
+      window.localStorage.getItem(getVisibilityStorageKey(VISIBILITY_STORAGE_VERSION_KEY)) || "0"
     );
 
     if (storedVersion < VISIBILITY_STORAGE_VERSION) {
-      return { ...parsed, ...DEFAULT_REVEALED_MARKERS };
+      return { ...parsed, ...(getCurrentCampaignId() === LEGACY_CAMPAIGN_ID ? DEFAULT_REVEALED_MARKERS : {}) };
     }
 
-    return { ...DEFAULT_REVEALED_MARKERS, ...parsed };
+    return { ...(getCurrentCampaignId() === LEGACY_CAMPAIGN_ID ? DEFAULT_REVEALED_MARKERS : {}), ...parsed };
   } catch (error) {
     console.warn("Unable to read marker visibility from localStorage.", error);
-    return { ...DEFAULT_REVEALED_MARKERS };
+    return getCurrentCampaignId() === LEGACY_CAMPAIGN_ID ? { ...DEFAULT_REVEALED_MARKERS } : {};
   }
 }
 
 function saveMarkerVisibility() {
   try {
     window.localStorage.setItem(
-      VISIBILITY_STORAGE_KEY,
+      getVisibilityStorageKey(VISIBILITY_STORAGE_KEY),
       JSON.stringify(markerVisibility)
     );
     window.localStorage.setItem(
-      VISIBILITY_STORAGE_VERSION_KEY,
+      getVisibilityStorageKey(VISIBILITY_STORAGE_VERSION_KEY),
       String(VISIBILITY_STORAGE_VERSION)
     );
   } catch (error) {
@@ -158,6 +208,13 @@ function isMarkerRevealed(marker) {
 }
 
 function isMarkerOnCurrentMap(marker) {
+  if (
+    getCurrentCampaignId() !== LEGACY_CAMPAIGN_ID &&
+    !marker.classList.contains("map-marker--custom") &&
+    !marker.classList.contains("portrait-marker--custom")
+  ) {
+    return false;
+  }
   const scope = getMarkerScope(marker);
   return scope === currentMap.id || scope === "global";
 }
@@ -170,12 +227,16 @@ function isAdminProfile(profile) {
   return profile?.role === ADMIN_ROLE;
 }
 
+function isCampaignDm(campaignId = getCurrentCampaignId()) {
+  return campaignMemberships[campaignId]?.role === "dm";
+}
+
 function canAccessCurrentView() {
-  if (!currentUser) {
+  if (!currentUser || !isValidCampaignId(getCurrentCampaignId())) {
     return false;
   }
 
-  return viewMode === "dm" ? isAdminProfile(currentUserProfile) : true;
+  return viewMode === "dm" ? isCampaignDm() : !!campaignMemberships[getCurrentCampaignId()];
 }
 
 function setAuthMessage(message, type = "info") {
@@ -322,7 +383,7 @@ async function imageExistsAtPath(imagePath) {
 }
 
 async function loadImageFileOptions() {
-  if ((!dmMarkerImageFileInput && !dmMarkerMapImageFileInput) || viewMode !== "dm") {
+  if ((!dmMarkerImageFileInput && !dmMarkerMapImageFileInput && !rootMapImageFileInput) || viewMode !== "dm") {
     return;
   }
 
@@ -330,6 +391,7 @@ async function loadImageFileOptions() {
     const imageNames = await fetchImageFileNames();
     populateImageSelect(dmMarkerImageFileInput, imageNames, "No image");
     populateImageSelect(dmMarkerMapImageFileInput, imageNames, "Choose map image");
+    populateImageSelect(rootMapImageFileInput, imageNames, "Choose map image");
   } catch (error) {
     console.warn("Unable to load image file options.", error);
   }
@@ -699,7 +761,7 @@ function startPresenceSync() {
     return;
   }
 
-  playerDirectoryRef = firebaseDatabase.ref(PLAYER_DIRECTORY_PATH);
+  playerDirectoryRef = firebaseDatabase.ref(getCampaignPath("playerDirectory"));
   currentPlayerDirectoryRef = playerDirectoryRef.child(currentUser.uid);
   playerDirectoryConnected = true;
 
@@ -738,7 +800,11 @@ function applyVisibilitySnapshot(nextVisibility) {
     delete markerVisibility[key];
   }
 
-  Object.assign(markerVisibility, DEFAULT_REVEALED_MARKERS, nextVisibility || {});
+  Object.assign(
+    markerVisibility,
+    getCurrentCampaignId() === LEGACY_CAMPAIGN_ID ? DEFAULT_REVEALED_MARKERS : {},
+    nextVisibility || {}
+  );
   saveMarkerVisibility();
   applyAllMarkerStates();
 
@@ -782,10 +848,47 @@ function stopFirebaseSync() {
     customMarkersRef.off();
   }
 
+  if (rootMapRef) {
+    rootMapRef.off();
+  }
+
   databaseRef = null;
   customMarkersRef = null;
+  rootMapRef = null;
   firebaseReady = false;
   firebaseSyncStarted = false;
+}
+
+function applyCampaignRootMap(rootMap) {
+  const hasRootMap = rootMap?.src && rootMap?.id && rootMap?.title;
+  campaignRootMap = hasRootMap ? rootMap : null;
+
+  if (!campaignRootMap && getCurrentCampaignId() === LEGACY_CAMPAIGN_ID) {
+    campaignRootMap = { ...ROOT_MAP };
+  }
+
+  if (rootMapSetup) {
+    rootMapSetup.hidden = !!campaignRootMap;
+  }
+  if (mapFrame) {
+    mapFrame.hidden = !campaignRootMap;
+  }
+
+  if (!campaignRootMap) {
+    applyCustomMarkersSnapshot({});
+    applyVisibilitySnapshot({});
+    return;
+  }
+
+  mapHistory.splice(0, mapHistory.length, { ...campaignRootMap });
+  currentMap = { ...campaignRootMap };
+  mapImage.src = campaignRootMap.src;
+  mapImage.alt = campaignRootMap.alt || campaignRootMap.title;
+  updateMapHeader();
+  applyAllMarkerStates();
+  if (currentUser && !campaignPickerOpen) {
+    updateAppVisibility();
+  }
 }
 
 function initializeFirebaseServices() {
@@ -809,14 +912,22 @@ function initializeFirebaseServices() {
 }
 
 function initializeFirebaseSync() {
-  if (!firebaseDatabase || firebaseSyncStarted) {
+  if (!firebaseDatabase || firebaseSyncStarted || !getCurrentCampaignId()) {
     return;
   }
 
-  databaseRef = firebaseDatabase.ref(FIREBASE_PATH);
-  customMarkersRef = firebaseDatabase.ref(CUSTOM_MARKERS_PATH);
+  databaseRef = firebaseDatabase.ref(getCampaignPath("maps/barovia/markerVisibility"));
+  customMarkersRef = firebaseDatabase.ref(getCampaignPath("maps/barovia/customMarkers"));
+  rootMapRef = firebaseDatabase.ref(getCampaignPath("rootMap"));
   firebaseReady = true;
   firebaseSyncStarted = true;
+
+  rootMapRef.on("value", (snapshot) => {
+    applyCampaignRootMap(snapshot.val());
+  }, (error) => {
+    console.warn("Unable to read campaign root map.", error);
+    setAuthMessage("Campaign map configuration could not be loaded.", "error");
+  });
 
   databaseRef.on("value", (snapshot) => {
     const data = snapshot.val();
@@ -826,7 +937,7 @@ function initializeFirebaseSync() {
       return;
     }
 
-    if (viewMode === "dm" && canAccessCurrentView()) {
+    if (viewMode === "dm" && canAccessCurrentView() && campaignRootMap) {
       broadcastVisibilityState();
     }
   }, (error) => {
@@ -882,6 +993,7 @@ async function ensureUserProfile(user, username) {
     };
 
     await userRef.update(nextProfile);
+    await firebaseDatabase.ref(`${USERNAME_DIRECTORY_PATH}/${nextProfile.username}`).set(user.uid);
 
     if (user.displayName !== nextProfile.username) {
       await user.updateProfile({ displayName: nextProfile.username });
@@ -897,20 +1009,218 @@ async function ensureUserProfile(user, username) {
   }
 }
 
-function scheduleUnauthorizedRedirect() {
-  if (viewMode !== "dm") {
+async function loadCampaignMemberships() {
+  if (!firebaseDatabase || !currentUser) {
+    campaignMemberships = {};
     return;
   }
 
-  window.clearTimeout(unauthorizedRedirectTimer);
-  unauthorizedRedirectTimer = window.setTimeout(() => {
-    window.location.href = "index.html";
-  }, 1800);
+  const snapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${currentUser.uid}`).once("value");
+  const data = snapshot.val();
+  campaignMemberships = data && typeof data === "object" ? data : {};
 }
 
-function cancelUnauthorizedRedirect() {
-  window.clearTimeout(unauthorizedRedirectTimer);
-  unauthorizedRedirectTimer = null;
+function stopCampaignMembershipSync() {
+  if (campaignMembershipsRef) {
+    campaignMembershipsRef.off();
+  }
+  campaignMembershipsRef = null;
+}
+
+function startCampaignMembershipSync() {
+  if (!firebaseDatabase || !currentUser) {
+    return;
+  }
+
+  stopCampaignMembershipSync();
+  campaignMembershipsRef = firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${currentUser.uid}`);
+  campaignMembershipsRef.on("value", (snapshot) => {
+    const data = snapshot.val();
+    campaignMemberships = data && typeof data === "object" ? data : {};
+    updateSessionPanel();
+    renderCampaignList();
+    updateAppVisibility();
+  });
+}
+
+function renderCampaignList() {
+  if (!campaignPanel || !campaignList || !currentUser) {
+    return;
+  }
+
+  const memberships = Object.entries(campaignMemberships)
+    .filter(([, membership]) => membership && (viewMode !== "dm" || membership.role === "dm"))
+    .sort((a, b) => String(a[1].name || a[0]).localeCompare(String(b[1].name || b[0])));
+
+  campaignPanel.hidden = false;
+  campaignList.innerHTML = "";
+
+  if (memberships.length === 0) {
+    campaignList.innerHTML = `<p class="location-panel__status">${
+      viewMode === "dm" ? "You are not managing any campaigns yet." : "No campaigns are available for this account."
+    }</p>`;
+  }
+
+  for (const [campaignId, membership] of memberships) {
+    const card = document.createElement("article");
+    card.className = "campaign-card";
+    card.setAttribute("aria-pressed", String(campaignId === activeCampaignId));
+    card.innerHTML = `
+      <strong>${escapeHtml(membership.name || campaignId)}</strong>
+      <span>${membership.role === "dm" ? "Dungeon Master" : "Player"}</span>
+      <div class="session-panel__actions">
+        <button type="button" class="auth-button auth-button--primary" data-campaign-open="${escapeHtml(campaignId)}">Open Map</button>
+        ${membership.role === "dm" ? `<button type="button" class="auth-button" data-campaign-manage="${escapeHtml(campaignId)}">Manage Players</button>` : ""}
+      </div>
+    `;
+    campaignList.append(card);
+  }
+
+  if (campaignAdmin) {
+    campaignAdmin.hidden = !isAdminProfile(currentUserProfile);
+  }
+  if (campaignInviteForm) {
+    campaignInviteForm.hidden = !isCampaignDm();
+  }
+}
+
+async function loadInvitePlayerOptions() {
+  if (!firebaseDatabase || !campaignInvitePlayerSelect || !isCampaignDm()) {
+    return;
+  }
+
+  campaignInvitePlayerSelect.disabled = true;
+  campaignInvitePlayerSelect.innerHTML = '<option value="">Loading players...</option>';
+
+  try {
+    const playersSnapshot = await firebaseDatabase.ref(USERNAME_DIRECTORY_PATH).once("value");
+    const players = playersSnapshot.val();
+    const availablePlayers = [];
+
+    for (const [username, uid] of Object.entries(players && typeof players === "object" ? players : {})) {
+      if (uid === currentUser.uid) {
+        continue;
+      }
+      const membershipSnapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${getCurrentCampaignId()}`).once("value");
+      if (!membershipSnapshot.exists()) {
+        availablePlayers.push({
+          uid,
+          username,
+          displayName: username
+        });
+      }
+    }
+
+    availablePlayers.sort((a, b) => a.displayName.localeCompare(b.displayName));
+    campaignInvitePlayerSelect.innerHTML = '<option value="">Select a player</option>';
+
+    for (const player of availablePlayers) {
+      const option = document.createElement("option");
+      option.value = player.uid;
+      option.dataset.username = player.username;
+      option.textContent = `${player.displayName} (${player.username})`;
+      campaignInvitePlayerSelect.append(option);
+    }
+
+    if (availablePlayers.length === 0) {
+      campaignInvitePlayerSelect.innerHTML = '<option value="">All existing players are already members</option>';
+    }
+  } catch (error) {
+    console.error("Unable to load players for invitation.", error);
+    campaignInvitePlayerSelect.innerHTML = '<option value="">Player list could not be loaded</option>';
+  } finally {
+    campaignInvitePlayerSelect.disabled = false;
+  }
+}
+
+async function loadCampaignMemberList() {
+  if (!firebaseDatabase || !campaignMembers || !campaignMemberList || !isCampaignDm()) {
+    return;
+  }
+
+  campaignMembers.hidden = false;
+  campaignMemberList.innerHTML = '<p class="location-panel__status">Loading current players...</p>';
+
+  try {
+    const usernamesSnapshot = await firebaseDatabase.ref(USERNAME_DIRECTORY_PATH).once("value");
+    const usernames = usernamesSnapshot.val();
+    const usernameByUid = {};
+    for (const [username, uid] of Object.entries(usernames && typeof usernames === "object" ? usernames : {})) {
+      usernameByUid[uid] = username;
+    }
+
+    const members = [];
+    for (const [uid, username] of Object.entries(usernameByUid)) {
+      const membershipSnapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${getCurrentCampaignId()}`).once("value");
+      const membership = membershipSnapshot.val();
+      if (membership?.role === "player") {
+        members.push({ uid, username });
+      }
+    }
+
+    members.sort((a, b) => a.username.localeCompare(b.username));
+    campaignMemberList.innerHTML = "";
+
+    if (members.length === 0) {
+      campaignMemberList.innerHTML = '<p class="location-panel__status">No players are currently in this campaign.</p>';
+      return;
+    }
+
+    for (const member of members) {
+      const item = document.createElement("article");
+      item.className = "campaign-member";
+      item.innerHTML = `
+        <strong>${escapeHtml(member.username)}</strong>
+        <button type="button" class="auth-button campaign-member__remove" data-remove-campaign-member="${escapeHtml(member.uid)}" data-member-username="${escapeHtml(member.username)}">Remove</button>
+      `;
+      campaignMemberList.append(item);
+    }
+  } catch (error) {
+    console.error("Unable to load campaign members.", error);
+    campaignMemberList.innerHTML = '<p class="location-panel__status">Current players could not be loaded.</p>';
+  }
+}
+
+async function refreshCampaignPlayerManagement() {
+  await Promise.all([
+    loadInvitePlayerOptions(),
+    loadCampaignMemberList()
+  ]);
+}
+
+function selectCampaign(campaignId, openMap = true) {
+  if (!campaignMemberships[campaignId] || (viewMode === "dm" && campaignMemberships[campaignId].role !== "dm")) {
+    return;
+  }
+
+  stopFirebaseSync();
+  stopPresenceSync();
+  activeCampaignId = campaignId;
+  campaignPickerOpen = !openMap;
+  campaignRootMap = null;
+  applyCampaignRootMap(null);
+  applyVisibilitySnapshot(loadMarkerVisibility());
+  updateAuthCopy();
+  updateSessionPanel();
+  renderCampaignList();
+  updateAppVisibility();
+
+  if (openMap) {
+    initializeFirebaseSync();
+    startPresenceSync();
+    setAuthMessage("", "info");
+  } else if (isCampaignDm()) {
+    refreshCampaignPlayerManagement();
+  }
+}
+
+function openCampaignPicker() {
+  stopFirebaseSync();
+  stopPresenceSync();
+  campaignPickerOpen = true;
+  updateAuthCopy();
+  renderCampaignList();
+  updateAppVisibility();
 }
 
 function updateAuthCopy() {
@@ -923,6 +1233,14 @@ function updateAuthCopy() {
       viewMode === "dm"
         ? "Only the admin account can open the DM controls for this page."
         : "Players need an account before they can open the shared map.";
+    return;
+  }
+
+  if (campaignPickerOpen) {
+    authCopy.textContent =
+      viewMode === "dm"
+        ? "Choose a campaign to manage, create a new campaign, or add players."
+        : "Choose one of your campaigns to open its shared map.";
     return;
   }
 
@@ -954,6 +1272,12 @@ function updateSessionPanel() {
     if (authPasswordInput) {
       authPasswordInput.value = "";
     }
+    if (campaignPanel) {
+      campaignPanel.hidden = true;
+    }
+    if (campaignList) {
+      campaignList.innerHTML = "";
+    }
     return;
   }
 
@@ -963,7 +1287,8 @@ function updateSessionPanel() {
 
   const roleLabel = isAdminProfile(currentUserProfile) ? "admin" : "player";
   sessionPanel.hidden = false;
-  sessionSummary.textContent = `Signed in as ${getDisplayName()} (${roleLabel}).`;
+  const campaignName = campaignMemberships[getCurrentCampaignId()]?.name;
+  sessionSummary.textContent = `Signed in as ${getDisplayName()} (${roleLabel})${campaignName ? ` in ${campaignName}` : "."}`;
 
   if (displayNameInput && viewMode === "player") {
     displayNameInput.value = getDisplayName();
@@ -984,15 +1309,14 @@ function updateSessionPanel() {
 
 function updateAppVisibility() {
   const allowed = canAccessCurrentView();
-  const shouldHideAuthPanel =
-    !!currentUser && (viewMode === "player" || (viewMode === "dm" && isAdminProfile(currentUserProfile)));
+  const shouldHideAuthPanel = !!currentUser && allowed && !campaignPickerOpen;
 
   if (authPanel) {
     authPanel.hidden = shouldHideAuthPanel;
   }
 
   if (appShell) {
-    appShell.hidden = !allowed;
+    appShell.hidden = !allowed || campaignPickerOpen;
   }
 
   if (appSignoutButton) {
@@ -1000,22 +1324,22 @@ function updateAppVisibility() {
   }
 
   if (dmControls) {
-    dmControls.hidden = viewMode !== "dm" || !allowed;
+    dmControls.hidden = viewMode !== "dm" || !allowed || campaignPickerOpen || !campaignRootMap;
   }
 
-  if (locationPanel && !allowed) {
+  if (locationPanel && (!allowed || campaignPickerOpen)) {
     locationPanel.hidden = true;
   }
 
   if (presencePanel) {
-    presencePanel.hidden = !allowed || viewMode !== "player";
+    presencePanel.hidden = !allowed || campaignPickerOpen || viewMode !== "player";
   }
 
   if (displayNameForm) {
-    displayNameForm.hidden = !allowed || viewMode !== "player";
+    displayNameForm.hidden = !allowed || campaignPickerOpen || viewMode !== "player";
   }
 
-  if (allowed) {
+  if (allowed && !campaignPickerOpen) {
     applyAllMarkerStates();
     updateMapHeader();
     syncPortraitRailHeight();
@@ -1555,6 +1879,8 @@ dmMarkerImageFileInput?.addEventListener("focus", loadImageFileOptions);
 dmMarkerImageFileInput?.addEventListener("pointerdown", loadImageFileOptions);
 dmMarkerMapImageFileInput?.addEventListener("focus", loadImageFileOptions);
 dmMarkerMapImageFileInput?.addEventListener("pointerdown", loadImageFileOptions);
+rootMapImageFileInput?.addEventListener("focus", loadImageFileOptions);
+rootMapImageFileInput?.addEventListener("pointerdown", loadImageFileOptions);
 
 mapStage?.addEventListener("click", async (event) => {
   if (!placementModeActive || viewMode !== "dm" || !canAccessCurrentView() || !mapImage) {
@@ -1588,6 +1914,142 @@ function getFriendlyAuthError(error) {
       return error?.message || "Authentication failed.";
   }
 }
+
+campaignList?.addEventListener("click", (event) => {
+  const openButton = event.target.closest("[data-campaign-open]");
+  const manageButton = event.target.closest("[data-campaign-manage]");
+
+  if (openButton) {
+    selectCampaign(openButton.dataset.campaignOpen, true);
+  } else if (manageButton) {
+    selectCampaign(manageButton.dataset.campaignManage, false);
+  }
+});
+
+campaignSwitchButton?.addEventListener("click", openCampaignPicker);
+
+campaignCreateForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const name = String(campaignNameInput?.value || "").trim();
+
+  if (!firebaseDatabase || !currentUser || !isAdminProfile(currentUserProfile) || !name || name.length > 60) {
+    setAuthMessage("Enter a campaign name with 1-60 characters.", "error");
+    return;
+  }
+
+  try {
+    const campaignId = createCampaignId(name);
+    const createdAt = new Date().toISOString();
+    await firebaseDatabase.ref(`campaigns/${campaignId}`).set({
+      name,
+      ownerUid: currentUser.uid,
+      createdAt
+    });
+    await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${currentUser.uid}/${campaignId}`).set({
+      name,
+      role: "dm",
+      joinedAt: createdAt
+    });
+    campaignNameInput.value = "";
+    await loadCampaignMemberships();
+    renderCampaignList();
+    setAuthMessage(`Campaign "${name}" created.`, "success");
+  } catch (error) {
+    console.error("Unable to create campaign.", error);
+    setAuthMessage("Campaign could not be created. Check your Firebase rules.", "error");
+  }
+});
+
+rootMapForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const title = String(rootMapTitleInput?.value || "").trim();
+  const fileName = normalizeImageFileName(rootMapImageFileInput?.value || "");
+
+  if (!firebaseDatabase || !isCampaignDm() || !title || !isSafeImageFileName(fileName)) {
+    setAuthMessage("Choose a map title and an image from assets/images.", "error");
+    return;
+  }
+
+  const submitButton = rootMapForm.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  if (rootMapStatus) {
+    rootMapStatus.hidden = false;
+    rootMapStatus.textContent = "Saving starting map...";
+    rootMapStatus.dataset.state = "info";
+  }
+
+  try {
+    await firebaseDatabase.ref(getCampaignPath("rootMap")).set({
+      id: "root",
+      title,
+      src: getImagePathFromFileName(fileName),
+      alt: `Map of ${title}`,
+      imageFileName: fileName
+    });
+
+    rootMapForm.reset();
+    rootMapStatus.textContent = "Starting map saved.";
+    rootMapStatus.dataset.state = "success";
+  } catch (error) {
+    console.error("Unable to save campaign starting map.", error);
+    rootMapStatus.textContent = "Starting map could not be saved.";
+    rootMapStatus.dataset.state = "error";
+  } finally {
+    submitButton.disabled = false;
+  }
+});
+
+campaignInviteForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const invitedUid = campaignInvitePlayerSelect?.value || "";
+  const selectedOption = campaignInvitePlayerSelect?.selectedOptions?.[0];
+  const username = selectedOption?.dataset.username || "Selected player";
+  const membership = campaignMemberships[getCurrentCampaignId()];
+
+  if (!firebaseDatabase || !currentUser || !isCampaignDm() || !invitedUid || !membership) {
+    setAuthMessage("Select a player and a campaign you manage.", "error");
+    return;
+  }
+
+  try {
+    await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${invitedUid}/${getCurrentCampaignId()}`).set({
+      name: membership.name || getCurrentCampaignId(),
+      role: "player",
+      joinedAt: new Date().toISOString()
+    });
+    await refreshCampaignPlayerManagement();
+    setAuthMessage(`${username} can now see ${membership.name || "this campaign"}.`, "success");
+  } catch (error) {
+    console.error("Unable to invite player.", error);
+    setAuthMessage("Player could not be added. Check the username and Firebase rules.", "error");
+  }
+});
+
+campaignMemberList?.addEventListener("click", async (event) => {
+  const removeButton = event.target.closest("[data-remove-campaign-member]");
+  if (!removeButton || !firebaseDatabase || !isCampaignDm()) {
+    return;
+  }
+
+  const uid = removeButton.dataset.removeCampaignMember;
+  const username = removeButton.dataset.memberUsername || "this player";
+  const shouldRemove = window.confirm(`Remove ${username} from this campaign?`);
+  if (!shouldRemove) {
+    return;
+  }
+
+  removeButton.disabled = true;
+  try {
+    await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${getCurrentCampaignId()}`).remove();
+    await firebaseDatabase.ref(`${getCampaignPath("playerDirectory")}/${uid}`).remove();
+    await refreshCampaignPlayerManagement();
+    setAuthMessage(`${username} was removed from this campaign.`, "success");
+  } catch (error) {
+    console.error("Unable to remove campaign member.", error);
+    removeButton.disabled = false;
+    setAuthMessage("Player could not be removed. Check your Firebase rules.", "error");
+  }
+});
 
 async function signInWithUsername(username, password) {
   if (!firebaseAuth) {
@@ -1748,10 +2210,12 @@ displayNameForm?.addEventListener("submit", async (event) => {
 async function handleAuthStateChanged(user) {
   currentUser = user;
   currentUserProfile = null;
-  cancelUnauthorizedRedirect();
-
+  activeCampaignId = "";
+  campaignMemberships = {};
+  campaignPickerOpen = true;
   stopFirebaseSync();
   stopPresenceSync();
+  stopCampaignMembershipSync();
 
   if (!user) {
     updateAuthCopy();
@@ -1788,18 +2252,19 @@ async function handleAuthStateChanged(user) {
 
   updateAuthCopy();
   updateSessionPanel();
-
-  if (viewMode === "dm" && !canAccessCurrentView()) {
-    updateAppVisibility();
-    setAuthMessage("This account is not an admin. Redirecting to the player page...", "error");
-    scheduleUnauthorizedRedirect();
-    return;
+  try {
+    await loadCampaignMemberships();
+    startCampaignMembershipSync();
+    updateSessionPanel();
+    renderCampaignList();
+  } catch (error) {
+    console.error("Unable to load campaigns.", error);
+    setAuthMessage("Campaigns could not be loaded. Publish the updated Firebase rules and try again.", "error");
   }
-
   updateAppVisibility();
-  initializeFirebaseSync();
-  startPresenceSync();
-  setAuthMessage("", "info");
+  if (Object.keys(campaignMemberships).length > 0) {
+    setAuthMessage("", "info");
+  }
 }
 
 function initializeAuth() {

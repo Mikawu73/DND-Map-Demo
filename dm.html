@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barovia Map DM View</title>
-  <link rel="stylesheet" href="assets/styles/main.css?v=20260417-9">
+  <link rel="stylesheet" href="assets/styles/main.css?v=20260605-5">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
-  <script src="assets/scripts/firebase-config.js?v=20260417-9"></script>
-  <script src="assets/scripts/main.js?v=20260417-9" defer></script>
+  <script src="assets/scripts/firebase-config.js?v=20260605-5"></script>
+  <script src="assets/scripts/main.js?v=20260605-5" defer></script>
 </head>
 <body data-view="dm">
   <main class="page">
@@ -57,16 +57,65 @@
             <button type="button" id="auth-signout" class="auth-button">Sign Out</button>
           </div>
         </div>
+
+        <section id="campaign-panel" class="campaign-panel" hidden>
+          <div class="campaign-panel__header">
+            <h3>Managed Campaigns</h3>
+            <p>Select a campaign to manage its map and players.</p>
+          </div>
+          <div id="campaign-list" class="campaign-list"></div>
+          <section id="campaign-admin" class="campaign-admin" hidden>
+            <form id="campaign-create-form" class="campaign-admin__form">
+              <label class="auth-form__field">
+                <span>New Campaign Name</span>
+                <input id="campaign-name" type="text" maxlength="60" placeholder="New adventure" required>
+              </label>
+              <button class="auth-button auth-button--primary" type="submit">Create Campaign</button>
+            </form>
+            <form id="campaign-invite-form" class="campaign-admin__form" hidden>
+              <label class="auth-form__field">
+                <span>Select Existing Player</span>
+                <select id="campaign-invite-player" required>
+                  <option value="">Select a player</option>
+                </select>
+              </label>
+              <button class="auth-button" type="submit">Add To Selected Campaign</button>
+            </form>
+            <section id="campaign-members" class="campaign-members" hidden>
+              <h4>Current Players</h4>
+              <div id="campaign-member-list" class="campaign-member-list"></div>
+            </section>
+          </section>
+        </section>
       </div>
     </section>
 
     <section id="app-shell" class="map-shell" aria-labelledby="map-title" hidden>
+      <section id="root-map-setup" class="root-map-setup" hidden>
+        <h2>Set Campaign Starting Map</h2>
+        <p>This campaign is empty. Choose the first map that players should see from assets/images.</p>
+        <form id="root-map-form" class="campaign-admin__form">
+          <label class="auth-form__field">
+            <span>Map Title</span>
+            <input id="root-map-title" type="text" maxlength="80" placeholder="World Map" required>
+          </label>
+          <label class="auth-form__field">
+            <span>Map Image</span>
+            <select id="root-map-image-file" required>
+              <option value="">Choose map image</option>
+            </select>
+          </label>
+          <button class="auth-button auth-button--primary" type="submit">Set Starting Map</button>
+        </form>
+        <p id="root-map-status" class="display-name-status" hidden></p>
+      </section>
       <div class="map-frame">
         <div class="map-frame__topbar">
           <h2 id="map-title">Map of Barovia</h2>
           <div class="map-frame__actions">
             <button type="button" id="map-return" class="map-return" hidden>Return to Barovia</button>
             <button type="button" id="marker-toggle" class="marker-toggle" aria-pressed="true">Hide Markers</button>
+            <button type="button" id="campaign-switch" class="map-return">Campaigns</button>
             <button type="button" id="app-signout" class="map-return" hidden>Sign Out</button>
           </div>
         </div>

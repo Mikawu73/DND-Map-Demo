@@ -6,75 +6,79 @@ Run the map locally:
 python sync_server.py
 ```
 
-By default the server binds to `0.0.0.0`, so devices on the same Wi-Fi/LAN can connect.
-
 Then open:
 
-- Player view on this PC: `http://127.0.0.1:8000/index.html`
-- DM view on this PC: `http://127.0.0.1:8000/dm.html`
-- Phone/tablet on the same network: `http://<your-pc-ip>:8000/index.html`
+- Player view: `http://127.0.0.1:8000/index.html`
+- DM view: `http://127.0.0.1:8000/dm.html`
 
-## Auth setup
+## Authentication And Campaigns
 
-The site now expects Firebase Authentication plus Realtime Database user roles.
+The site uses Firebase Authentication and Realtime Database.
 
-### What changed
+- Users keep their existing username and password.
+- After signing in, users see a list of campaigns they belong to.
+- Existing users are automatically added to the default campaign `施特拉德的诅咒`.
+- Admin accounts are DMs of the default campaign and can create additional campaigns.
+- A DM can add an existing player account to a managed campaign by username.
+- Map visibility, custom markers, and the player directory are isolated per campaign.
 
-- Players must sign in with a username and password before seeing the map.
-- `dm.html` now requires an authenticated account with role `admin`.
-- Non-admin users who try to open `dm.html` are redirected back to `index.html`.
-- Map visibility still syncs through Firebase Realtime Database.
+Usernames use `a-z`, `0-9`, `.`, `_`, and `-`, with a length of `3-24`.
 
-### Username format
+## Firebase Setup
 
-- Usernames are converted to Firebase email logins behind the scenes.
-- Allowed characters: `a-z`, `0-9`, `.`, `_`, `-`
-- Length: `3-24`
+1. Enable `Authentication -> Sign-in method -> Email/Password`.
+2. Publish [firebase-database.rules.json](d:/Projects/DND_CoS_Map/DND-CoS-Map/firebase-database.rules.json).
+3. Existing admin accounts must keep `"role": "admin"` under `users/<uid>`.
+4. Move existing map data from `maps/barovia` to `campaigns/curse-of-strahd/maps/barovia`.
+5. Existing users only need to sign in once to receive their default campaign membership and username-directory entry.
 
-Example:
-
-- Username: `alice`
-- Internal Firebase email: `alice@barovia.local`
-
-### Firebase console steps
-
-1. In Firebase Console, enable `Authentication -> Sign-in method -> Email/Password`.
-2. Open the site and create your DM account from the sign-in form.
-3. In Firebase Realtime Database, find that user's UID under `users/<uid>`.
-4. Change that user's role from `player` to `admin`.
-5. Publish Realtime Database rules using [firebase-database.rules.json](d:/Projects/DND_CoS_Map/DND-CoS-Map/firebase-database.rules.json).
-
-Example user profile:
+The default campaign metadata is created automatically when an admin signs in. It can also be created manually:
 
 ```json
 {
-  "username": "dm",
-  "role": "admin",
-  "createdAt": "2026-04-10T00:00:00.000Z",
-  "lastLoginAt": "2026-04-10T00:00:00.000Z"
+  "campaigns": {
+    "curse-of-strahd": {
+      "name": "施特拉德的诅咒",
+      "ownerUid": "DM_USER_UID",
+      "createdAt": "2026-06-05T00:00:00.000Z"
+    }
+  }
 }
 ```
 
-### Realtime Database structure
+### Realtime Database Structure
 
 ```json
 {
-  "maps": {
-    "barovia": {
-      "markerVisibility": {
-        "barovia:gates-of-barovia-east": true
+  "campaigns": {
+    "curse-of-strahd": {
+      "name": "施特拉德的诅咒",
+      "ownerUid": "dmUid",
+      "maps": {
+        "barovia": {
+          "markerVisibility": {
+            "barovia:gates-of-barovia-east": true
+          }
+        }
       }
     }
   },
-  "users": {
-    "uid123": {
-      "username": "alice",
-      "role": "player"
+  "userCampaigns": {
+    "playerUid": {
+      "curse-of-strahd": {
+        "name": "施特拉德的诅咒",
+        "role": "player"
+      }
     },
-    "uid999": {
-      "username": "dm",
-      "role": "admin"
+    "dmUid": {
+      "curse-of-strahd": {
+        "name": "施特拉德的诅咒",
+        "role": "dm"
+      }
     }
+  },
+  "usernameDirectory": {
+    "alice": "playerUid"
   }
 }
 ```

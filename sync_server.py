@@ -169,6 +169,7 @@ class MapRequestHandler(SimpleHTTPRequestHandler):
             return
         super().do_GET()
 
+
     def translate_path(self, path):
         parsed = urlparse(path)
         request_path = parsed.path
@@ -231,6 +232,7 @@ class MapRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
 
 
 class MapServer(ThreadingHTTPServer):

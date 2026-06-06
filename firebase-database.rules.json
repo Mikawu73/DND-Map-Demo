@@ -1,65 +1,121 @@
 {
   "rules": {
-    "maps": {
-      "barovia": {
-        "markerVisibility": {
-          ".read": "auth != null",
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
+    "campaigns": {
+      "$campaignId": {
+        ".read": "auth != null && root.child('userCampaigns').child(auth.uid).child($campaignId).exists()",
+        ".write": "auth != null && (root.child('userCampaigns').child(auth.uid).child($campaignId).child('role').val() === 'dm' || (!data.exists() && newData.child('ownerUid').val() === auth.uid && root.child('users').child(auth.uid).child('role').val() === 'admin'))",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
         },
-        "customMarkers": {
-          ".read": "auth != null",
-          ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
-          "$markerId": {
-            "imageFileName": {
-              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+        "ownerUid": {
+          ".validate": "newData.isString() && ((!data.exists() && newData.val() === auth.uid) || newData.val() === data.val())"
+        },
+        "createdAt": {
+          ".validate": "newData.isString()"
+        },
+        "rootMap": {
+          "id": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80"
+          },
+          "title": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80"
+          },
+          "src": {
+            ".validate": "newData.isString() && newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)"
+          },
+          "alt": {
+            ".validate": "newData.isString() && newData.val().length <= 120"
+          },
+          "imageFileName": {
+            ".validate": "newData.isString() && newData.val().length <= 120"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "maps": {
+          "barovia": {
+            "customMarkers": {
+              "$markerId": {
+                "imageFileName": {
+                  ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+                },
+                "imagePath": {
+                  ".validate": "!newData.exists() || (newData.isString() && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)))"
+                },
+                "isMapMarker": {
+                  ".validate": "!newData.exists() || newData.isBoolean()"
+                },
+                "mapImageFileName": {
+                  ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+                },
+                "mapSrc": {
+                  ".validate": "!newData.exists() || (newData.isString() && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)))"
+                },
+                "targetMapId": {
+                  ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)"
+                },
+                "targetMapTitle": {
+                  ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)"
+                },
+                "mapAlt": {
+                  ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+                }
+              }
+            }
+          }
+        },
+        "playerDirectory": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && root.child('userCampaigns').child(auth.uid).child($campaignId).exists()",
+            "username": {
+              ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9._-]{3,24}$/)"
             },
-            "imagePath": {
-              ".validate": "!newData.exists() || (newData.isString() && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)))"
+            "displayName": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24"
             },
-            "isMapMarker": {
-              ".validate": "!newData.exists() || newData.isBoolean()"
+            "role": {
+              ".validate": "newData.val() === 'player'"
             },
-            "mapImageFileName": {
-              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+            "showInPlayerList": {
+              ".validate": "newData.isBoolean()"
             },
-            "mapSrc": {
-              ".validate": "!newData.exists() || (newData.isString() && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)))"
+            "lastUpdated": {
+              ".validate": "newData.isNumber()"
             },
-            "targetMapId": {
-              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)"
-            },
-            "targetMapTitle": {
-              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)"
-            },
-            "mapAlt": {
-              ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
+            "$other": {
+              ".validate": false
             }
           }
         }
       }
     },
-    "playerDirectory": {
-      ".read": "auth != null",
+    "userCampaigns": {
       "$uid": {
-        ".write": "auth != null && auth.uid === $uid",
-        "username": {
-          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9._-]{3,24}$/)"
-        },
-        "displayName": {
-          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24"
-        },
-        "role": {
-          ".validate": "newData.val() === 'player'"
-        },
-        "showInPlayerList": {
-          ".validate": "newData.isBoolean()"
-        },
-        "lastUpdated": {
-          ".validate": "newData.isNumber()"
-        },
-        "$other": {
-          ".validate": false
+        ".read": "auth != null && auth.uid === $uid",
+        "$campaignId": {
+          ".read": "auth != null && (auth.uid === $uid || root.child('userCampaigns').child(auth.uid).child($campaignId).child('role').val() === 'dm')",
+          ".write": "auth != null && ((root.child('userCampaigns').child(auth.uid).child($campaignId).child('role').val() === 'dm' && (!newData.exists() || newData.child('role').val() === 'player')) || (auth.uid === $uid && root.child('campaigns').child($campaignId).child('ownerUid').val() === auth.uid && newData.child('role').val() === 'dm'))",
+          "name": {
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
+          },
+          "role": {
+            ".validate": "newData.val() === 'player' || newData.val() === 'dm'"
+          },
+          "joinedAt": {
+            ".validate": "newData.isString()"
+          },
+          "$other": {
+            ".validate": false
+          }
         }
+      }
+    },
+    "usernameDirectory": {
+      ".read": "auth != null",
+      "$username": {
+        ".write": "auth != null && newData.val() === auth.uid && root.child('users').child(auth.uid).child('username').val() === $username",
+        ".validate": "newData.isString()"
       }
     },
     "users": {
