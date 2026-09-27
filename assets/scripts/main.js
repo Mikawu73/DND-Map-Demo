@@ -14,6 +14,7 @@ const rootMapSetup = document.getElementById("root-map-setup");
 const rootMapForm = document.getElementById("root-map-form");
 const rootMapTitleInput = document.getElementById("root-map-title");
 const rootMapImageFileInput = document.getElementById("root-map-image-file");
+const rootMapImageUploadInput = document.getElementById("root-map-image-upload");
 const rootMapStatus = document.getElementById("root-map-status");
 const portraitRail = document.getElementById("portrait-rail");
 const dmControls = document.getElementById("dm-controls");
@@ -25,10 +26,12 @@ const dmMarkerDescriptionInput = document.getElementById("dm-marker-description"
 const dmMarkerTypeInput = document.getElementById("dm-marker-type");
 const dmMarkerVisibleInput = document.getElementById("dm-marker-visible");
 const dmMarkerImageFileInput = document.getElementById("dm-marker-image-file");
+const dmMarkerImageUploadInput = document.getElementById("dm-marker-image-upload");
 const dmMarkerIsMapInput = document.getElementById("dm-marker-is-map");
 const dmMarkerMapFields = document.getElementById("dm-marker-map-fields");
 const dmMarkerMapTitleInput = document.getElementById("dm-marker-map-title");
 const dmMarkerMapImageFileInput = document.getElementById("dm-marker-map-image-file");
+const dmMarkerMapImageUploadInput = document.getElementById("dm-marker-map-image-upload");
 const dmMarkerPlacementButton = document.getElementById("dm-marker-place");
 const dmMarkerStatus = document.getElementById("dm-marker-status");
 const presencePanel = document.getElementById("presence-panel");
@@ -79,8 +82,12 @@ const ROOT_MAP = {
   title: "Map of Barovia"
 };
 const AUTH_CONFIG = window.APP_AUTH_CONFIG || {};
+const CLOUDINARY_CONFIG = window.CLOUDINARY_CONFIG || {};
 const USERNAME_DOMAIN = AUTH_CONFIG.usernameDomain || "barovia.local";
 const ADMIN_ROLE = AUTH_CONFIG.adminRole || "admin";
+const CLOUDINARY_CLOUD_NAME = String(CLOUDINARY_CONFIG.cloudName || "").trim();
+const CLOUDINARY_UPLOAD_PRESET = String(CLOUDINARY_CONFIG.uploadPreset || "").trim();
+const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 const params = new URLSearchParams(window.location.search);
 const bodyViewMode = document.body.dataset.view;
 const viewMode =
@@ -130,6 +137,8 @@ let campaignMemberships = {};
 let campaignPickerOpen = true;
 let campaignRootMap = null;
 let placementModeActive = false;
+let markerSaveBusy = false;
+let campaignDeleteBusy = false;
 const customMarkers = {};
 
 function normalizeCampaignId(value) {
@@ -380,6 +389,101 @@ async function imageExistsAtPath(imagePath) {
     console.warn("Unable to verify marker image.", error);
     return false;
   }
+}
+
+function getImageUploadValidationError(file) {
+  if (!file) {
+    return "";
+  }
+
+  const fileName = normalizeImageFileName(file.name);
+  if (!isSafeImageFileName(fileName)) {
+    return "Choose a JPG, JPEG, PNG, WebP, GIF, or AVIF image with a file name under 120 characters.";
+  }
+
+  if (!file.size) {
+    return "The selected image is empty.";
+  }
+
+  if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+    return "The selected image is larger than 10 MB.";
+  }
+
+  if (file.type && !file.type.startsWith("image/")) {
+    return "The selected file is not an image.";
+  }
+
+  return "";
+}
+
+async function uploadImageToCloudinary(file) {
+  if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
+    throw new Error("Cloudinary upload is not configured.");
+  }
+
+  const validationError = getImageUploadValidationError(file);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+  const response = await fetch(
+    `https://api.cloudinary.com/v1_1/${encodeURIComponent(CLOUDINARY_CLOUD_NAME)}/image/upload`,
+    {
+      method: "POST",
+      body: formData
+    }
+  );
+
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    console.warn("Cloudinary returned a non-JSON response.", error);
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `Cloudinary upload failed (${response.status}).`);
+  }
+
+  const secureUrl = String(payload?.secure_url || "");
+  let uploadedUrl;
+  try {
+    uploadedUrl = new URL(secureUrl);
+  } catch {
+    throw new Error("Cloudinary did not return a valid image URL.");
+  }
+
+  const expectedPathPrefix = `/${CLOUDINARY_CLOUD_NAME}/image/upload/`;
+  if (
+    uploadedUrl.protocol !== "https:" ||
+    uploadedUrl.hostname !== "res.cloudinary.com" ||
+    !uploadedUrl.pathname.startsWith(expectedPathPrefix)
+  ) {
+    throw new Error("Cloudinary returned an unexpected image URL.");
+  }
+
+  return {
+    fileName: normalizeImageFileName(file.name),
+    path: uploadedUrl.href
+  };
+}
+
+function bindExclusiveImageInputs(select, uploadInput) {
+  uploadInput?.addEventListener("change", () => {
+    if (uploadInput.files?.length && select) {
+      select.value = "";
+    }
+  });
+
+  select?.addEventListener("change", () => {
+    if (select.value && uploadInput) {
+      uploadInput.value = "";
+    }
+  });
 }
 
 async function loadImageFileOptions() {
@@ -1070,7 +1174,10 @@ function renderCampaignList() {
       <span>${membership.role === "dm" ? "Dungeon Master" : "Player"}</span>
       <div class="session-panel__actions">
         <button type="button" class="auth-button auth-button--primary" data-campaign-open="${escapeHtml(campaignId)}">Open Map</button>
-        ${membership.role === "dm" ? `<button type="button" class="auth-button" data-campaign-manage="${escapeHtml(campaignId)}">Manage Players</button>` : ""}
+        ${membership.role === "dm" ? `
+          <button type="button" class="auth-button" data-campaign-manage="${escapeHtml(campaignId)}">Manage Players</button>
+          <button type="button" class="auth-button auth-button--danger" data-campaign-delete="${escapeHtml(campaignId)}">Delete Campaign</button>
+        ` : ""}
       </div>
     `;
     campaignList.append(card);
@@ -1081,6 +1188,100 @@ function renderCampaignList() {
   }
   if (campaignInviteForm) {
     campaignInviteForm.hidden = !isCampaignDm();
+  }
+  if (campaignMembers && !isCampaignDm()) {
+    campaignMembers.hidden = true;
+  }
+}
+
+async function getCampaignMemberUids(campaignId) {
+  const directorySnapshot = await firebaseDatabase.ref(USERNAME_DIRECTORY_PATH).once("value");
+  const directory = directorySnapshot.val();
+  const candidateUids = new Set([currentUser.uid]);
+
+  for (const uid of Object.values(directory && typeof directory === "object" ? directory : {})) {
+    if (typeof uid === "string" && uid) {
+      candidateUids.add(uid);
+    }
+  }
+
+  const membershipChecks = await Promise.all(
+    [...candidateUids].map(async (uid) => {
+      const snapshot = await firebaseDatabase
+        .ref(`${USER_CAMPAIGNS_PATH}/${uid}/${campaignId}`)
+        .once("value");
+      return snapshot.exists() ? uid : null;
+    })
+  );
+
+  return membershipChecks.filter(Boolean);
+}
+
+async function deleteCampaign(campaignId, deleteButton) {
+  const membership = campaignMemberships[campaignId];
+  if (
+    campaignDeleteBusy ||
+    !firebaseDatabase ||
+    !currentUser ||
+    membership?.role !== "dm"
+  ) {
+    return;
+  }
+
+  const campaignName = membership.name || campaignId;
+  const shouldDelete = window.confirm(
+    `Permanently delete "${campaignName}"?\n\n` +
+    "This deletes its maps, markers, and player memberships. Cloudinary images remain in your Media Library. This cannot be undone."
+  );
+  if (!shouldDelete) {
+    return;
+  }
+
+  campaignDeleteBusy = true;
+  const cardButtons = deleteButton?.closest(".campaign-card")?.querySelectorAll("button") || [];
+  for (const button of cardButtons) {
+    button.disabled = true;
+  }
+  setAuthMessage(`Deleting campaign "${campaignName}"...`, "info");
+
+  try {
+    const memberUids = await getCampaignMemberUids(campaignId);
+    const updates = {
+      [`campaigns/${campaignId}`]: null
+    };
+
+    for (const uid of memberUids) {
+      updates[`${USER_CAMPAIGNS_PATH}/${uid}/${campaignId}`] = null;
+    }
+
+    await firebaseDatabase.ref().update(updates);
+
+    window.localStorage.removeItem(`${VISIBILITY_STORAGE_KEY}:${campaignId}`);
+    window.localStorage.removeItem(`${VISIBILITY_STORAGE_VERSION_KEY}:${campaignId}`);
+    delete campaignMemberships[campaignId];
+
+    if (activeCampaignId === campaignId) {
+      stopFirebaseSync();
+      stopPresenceSync();
+      activeCampaignId = "";
+      campaignRootMap = null;
+      applyCampaignRootMap(null);
+    }
+
+    campaignPickerOpen = true;
+    updateAuthCopy();
+    updateSessionPanel();
+    renderCampaignList();
+    updateAppVisibility();
+    setAuthMessage(`Campaign "${campaignName}" was permanently deleted.`, "success");
+  } catch (error) {
+    console.error("Unable to delete campaign.", error);
+    for (const button of cardButtons) {
+      button.disabled = false;
+    }
+    setAuthMessage("Campaign could not be deleted. Check your Firebase rules and try again.", "error");
+  } finally {
+    campaignDeleteBusy = false;
   }
 }
 
@@ -1661,13 +1862,15 @@ async function buildCustomMarkerRecord(position = null) {
   const description = dmMarkerDescriptionInput?.value.trim() || "";
   const markerType = dmMarkerTypeInput?.value || "location";
   const visible = dmMarkerVisibleInput?.checked ?? true;
-  const imageFileName = normalizeImageFileName(dmMarkerImageFileInput?.value || "");
-  const imagePath = getImagePathFromFileName(imageFileName);
+  const imageUploadFile = dmMarkerImageUploadInput?.files?.[0] || null;
+  let imageFileName = normalizeImageFileName(dmMarkerImageFileInput?.value || "");
+  let imagePath = getImagePathFromFileName(imageFileName);
   const isNpcMarker = markerType === "npc";
   const isMapMarker = (dmMarkerIsMapInput?.checked ?? false) && !isNpcMarker;
   const targetMapTitle = (dmMarkerMapTitleInput?.value.trim() || title).trim();
-  const mapImageFileName = normalizeImageFileName(dmMarkerMapImageFileInput?.value || "");
-  const mapSrc = getImagePathFromFileName(mapImageFileName);
+  const mapImageUploadFile = dmMarkerMapImageUploadInput?.files?.[0] || null;
+  let mapImageFileName = normalizeImageFileName(dmMarkerMapImageFileInput?.value || "");
+  let mapSrc = getImagePathFromFileName(mapImageFileName);
   const targetMapId = getMapIdFromTitle(targetMapTitle);
 
   if (!title) {
@@ -1680,7 +1883,13 @@ async function buildCustomMarkerRecord(position = null) {
     return null;
   }
 
-  if (imageFileName) {
+  const imageUploadError = getImageUploadValidationError(imageUploadFile);
+  if (imageUploadError) {
+    setDmMarkerStatus(imageUploadError, "error");
+    return null;
+  }
+
+  if (!imageUploadFile && imageFileName) {
     if (!isSafeImageFileName(imageFileName)) {
       setDmMarkerStatus("Use an image file name ending in .jpg, .jpeg, .png, .webp, .gif, or .avif.", "error");
       return null;
@@ -1704,16 +1913,44 @@ async function buildCustomMarkerRecord(position = null) {
       return null;
     }
 
-    if (!isSafeImageFileName(mapImageFileName)) {
-      setDmMarkerStatus("Use a map image file name ending in .jpg, .jpeg, .png, .webp, .gif, or .avif.", "error");
+    const mapImageUploadError = getImageUploadValidationError(mapImageUploadFile);
+    if (mapImageUploadError) {
+      setDmMarkerStatus(mapImageUploadError, "error");
       return null;
     }
 
-    const mapImageExists = await imageExistsAtPath(mapSrc);
-    if (!mapImageExists) {
-      setDmMarkerStatus(`Could not find "${mapImageFileName}" in assets/images. Upload it there first.`, "error");
+    if (!mapImageUploadFile && !isSafeImageFileName(mapImageFileName)) {
+      setDmMarkerStatus("Choose an existing map image or upload a new one.", "error");
       return null;
     }
+
+    if (!mapImageUploadFile) {
+      const mapImageExists = await imageExistsAtPath(mapSrc);
+      if (!mapImageExists) {
+        setDmMarkerStatus(`Could not find "${mapImageFileName}" in assets/images.`, "error");
+        return null;
+      }
+    }
+  }
+
+  try {
+    if (imageUploadFile) {
+      setDmMarkerStatus("Uploading marker image to Cloudinary...", "info");
+      const upload = await uploadImageToCloudinary(imageUploadFile);
+      imageFileName = upload.fileName;
+      imagePath = upload.path;
+    }
+
+    if (isMapMarker && mapImageUploadFile) {
+      setDmMarkerStatus("Uploading map image to Cloudinary...", "info");
+      const upload = await uploadImageToCloudinary(mapImageUploadFile);
+      mapImageFileName = upload.fileName;
+      mapSrc = upload.path;
+    }
+  } catch (error) {
+    console.error("Unable to upload marker image.", error);
+    setDmMarkerStatus(error?.message || "Image upload failed. Try again.", "error");
+    return null;
   }
 
   const markerRef = customMarkersRef.push();
@@ -1782,31 +2019,45 @@ async function saveCustomMarker(markerRef, markerRecord, successMessage) {
 }
 
 async function createCustomNpcMarker() {
-  if (!firebaseDatabase || !customMarkersRef || !canAccessCurrentView() || viewMode !== "dm") {
+  if (markerSaveBusy || !firebaseDatabase || !customMarkersRef || !canAccessCurrentView() || viewMode !== "dm") {
     return;
   }
 
-  const result = await buildCustomMarkerRecord();
-  if (!result) {
-    return;
-  }
+  markerSaveBusy = true;
+  dmMarkerPlacementButton.disabled = true;
+  try {
+    const result = await buildCustomMarkerRecord();
+    if (!result) {
+      return;
+    }
 
-  const { markerRef, markerRecord } = result;
-  await saveCustomMarker(markerRef, markerRecord, `NPC "${markerRecord.title}" added to ${currentMap.title}.`);
+    const { markerRef, markerRecord } = result;
+    await saveCustomMarker(markerRef, markerRecord, `NPC "${markerRecord.title}" added to ${currentMap.title}.`);
+  } finally {
+    markerSaveBusy = false;
+    dmMarkerPlacementButton.disabled = false;
+  }
 }
 
 async function createCustomMarkerAtPosition(x, y) {
-  if (!firebaseDatabase || !customMarkersRef || !canAccessCurrentView() || viewMode !== "dm") {
+  if (markerSaveBusy || !firebaseDatabase || !customMarkersRef || !canAccessCurrentView() || viewMode !== "dm") {
     return;
   }
 
-  const result = await buildCustomMarkerRecord({ x, y });
-  if (!result) {
-    return;
-  }
+  markerSaveBusy = true;
+  dmMarkerPlacementButton.disabled = true;
+  try {
+    const result = await buildCustomMarkerRecord({ x, y });
+    if (!result) {
+      return;
+    }
 
-  const { markerRef, markerRecord } = result;
-  await saveCustomMarker(markerRef, markerRecord, `Marker "${markerRecord.title}" added to ${currentMap.title}.`);
+    const { markerRef, markerRecord } = result;
+    await saveCustomMarker(markerRef, markerRecord, `Marker "${markerRecord.title}" added to ${currentMap.title}.`);
+  } finally {
+    markerSaveBusy = false;
+    dmMarkerPlacementButton.disabled = false;
+  }
 }
 
 async function deleteCustomMarker(marker) {
@@ -1881,9 +2132,12 @@ dmMarkerMapImageFileInput?.addEventListener("focus", loadImageFileOptions);
 dmMarkerMapImageFileInput?.addEventListener("pointerdown", loadImageFileOptions);
 rootMapImageFileInput?.addEventListener("focus", loadImageFileOptions);
 rootMapImageFileInput?.addEventListener("pointerdown", loadImageFileOptions);
+bindExclusiveImageInputs(dmMarkerImageFileInput, dmMarkerImageUploadInput);
+bindExclusiveImageInputs(dmMarkerMapImageFileInput, dmMarkerMapImageUploadInput);
+bindExclusiveImageInputs(rootMapImageFileInput, rootMapImageUploadInput);
 
 mapStage?.addEventListener("click", async (event) => {
-  if (!placementModeActive || viewMode !== "dm" || !canAccessCurrentView() || !mapImage) {
+  if (markerSaveBusy || !placementModeActive || viewMode !== "dm" || !canAccessCurrentView() || !mapImage) {
     return;
   }
 
@@ -1915,14 +2169,17 @@ function getFriendlyAuthError(error) {
   }
 }
 
-campaignList?.addEventListener("click", (event) => {
+campaignList?.addEventListener("click", async (event) => {
   const openButton = event.target.closest("[data-campaign-open]");
   const manageButton = event.target.closest("[data-campaign-manage]");
+  const deleteButton = event.target.closest("[data-campaign-delete]");
 
   if (openButton) {
     selectCampaign(openButton.dataset.campaignOpen, true);
   } else if (manageButton) {
     selectCampaign(manageButton.dataset.campaignManage, false);
+  } else if (deleteButton) {
+    await deleteCampaign(deleteButton.dataset.campaignDelete, deleteButton);
   }
 });
 
@@ -1963,10 +2220,18 @@ campaignCreateForm?.addEventListener("submit", async (event) => {
 rootMapForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const title = String(rootMapTitleInput?.value || "").trim();
-  const fileName = normalizeImageFileName(rootMapImageFileInput?.value || "");
+  const uploadFile = rootMapImageUploadInput?.files?.[0] || null;
+  let fileName = normalizeImageFileName(rootMapImageFileInput?.value || "");
+  let imageSrc = getImagePathFromFileName(fileName);
 
-  if (!firebaseDatabase || !isCampaignDm() || !title || !isSafeImageFileName(fileName)) {
-    setAuthMessage("Choose a map title and an image from assets/images.", "error");
+  if (!firebaseDatabase || !isCampaignDm() || !title) {
+    setAuthMessage("Enter a map title and choose or upload an image.", "error");
+    return;
+  }
+
+  const uploadError = getImageUploadValidationError(uploadFile);
+  if (uploadError || (!uploadFile && !isSafeImageFileName(fileName))) {
+    setAuthMessage(uploadError || "Choose an existing map image or upload a new one.", "error");
     return;
   }
 
@@ -1979,10 +2244,18 @@ rootMapForm?.addEventListener("submit", async (event) => {
   }
 
   try {
+    if (uploadFile) {
+      rootMapStatus.textContent = "Uploading starting map to Cloudinary...";
+      const upload = await uploadImageToCloudinary(uploadFile);
+      fileName = upload.fileName;
+      imageSrc = upload.path;
+    }
+
+    rootMapStatus.textContent = "Saving starting map...";
     await firebaseDatabase.ref(getCampaignPath("rootMap")).set({
       id: "root",
       title,
-      src: getImagePathFromFileName(fileName),
+      src: imageSrc,
       alt: `Map of ${title}`,
       imageFileName: fileName
     });
@@ -1992,7 +2265,7 @@ rootMapForm?.addEventListener("submit", async (event) => {
     rootMapStatus.dataset.state = "success";
   } catch (error) {
     console.error("Unable to save campaign starting map.", error);
-    rootMapStatus.textContent = "Starting map could not be saved.";
+    rootMapStatus.textContent = error?.message || "Starting map could not be saved.";
     rootMapStatus.dataset.state = "error";
   } finally {
     submitButton.disabled = false;

@@ -177,6 +177,12 @@ body {
   border-color: rgba(45, 22, 15, 0.8);
 }
 
+.auth-button--danger {
+  color: #fff7de;
+  background: #7a1f1f;
+  border-color: rgba(122, 31, 31, 0.88);
+}
+
 .auth-button:disabled {
   opacity: 0.6;
   cursor: wait;
@@ -861,6 +867,30 @@ body {
   border: 1px solid rgba(89, 72, 59, 0.24);
   border-radius: 14px;
   background: rgba(255, 251, 243, 0.95);
+}
+
+.dm-creator__field input[type="file"],
+.auth-form__field input[type="file"] {
+  padding: 9px 10px;
+}
+
+.dm-creator__field input[type="file"]::file-selector-button,
+.auth-form__field input[type="file"]::file-selector-button {
+  margin-right: 10px;
+  padding: 8px 12px;
+  color: #fff8e7;
+  font: inherit;
+  font-weight: 700;
+  border: 0;
+  border-radius: 10px;
+  background: #6c2f24;
+  cursor: pointer;
+}
+
+.image-upload-hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .dm-creator__field textarea {

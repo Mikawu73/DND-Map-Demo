@@ -13,3 +13,10 @@ window.APP_AUTH_CONFIG = {
   usernameDomain: "barovia.local",
   adminRole: "admin"
 };
+
+// These values are safe to expose in the browser for unsigned uploads.
+// Never add the Cloudinary API secret to this file.
+window.CLOUDINARY_CONFIG = {
+  cloudName: "ehj3olxo",
+  uploadPreset: "DNDjpgs"
+};

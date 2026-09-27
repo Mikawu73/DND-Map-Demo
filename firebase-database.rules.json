@@ -21,7 +21,7 @@
             ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 80"
           },
           "src": {
-            ".validate": "newData.isString() && newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)"
+            ".validate": "newData.isString() && newData.val().length <= 1000 && (newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/) || newData.val().matches(/^https:\\/\\/res\\.cloudinary\\.com\\/ehj3olxo\\/image\\/upload\\/.+$/))"
           },
           "alt": {
             ".validate": "newData.isString() && newData.val().length <= 120"
@@ -41,7 +41,7 @@
                   ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
                 },
                 "imagePath": {
-                  ".validate": "!newData.exists() || (newData.isString() && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)))"
+                  ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 1000 && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/) || newData.val().matches(/^https:\\/\\/res\\.cloudinary\\.com\\/ehj3olxo\\/image\\/upload\\/.+$/)))"
                 },
                 "isMapMarker": {
                   ".validate": "!newData.exists() || newData.isBoolean()"
@@ -50,7 +50,7 @@
                   ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 120)"
                 },
                 "mapSrc": {
-                  ".validate": "!newData.exists() || (newData.isString() && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/)))"
+                  ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 1000 && (newData.val() === '' || newData.val().matches(/^assets\\/images\\/[^\\\\/]{1,180}\\.(avif|gif|jpeg|jpg|png|webp)$/) || newData.val().matches(/^https:\\/\\/res\\.cloudinary\\.com\\/ehj3olxo\\/image\\/upload\\/.+$/)))"
                 },
                 "targetMapId": {
                   ".validate": "!newData.exists() || (newData.isString() && newData.val().length <= 80)"

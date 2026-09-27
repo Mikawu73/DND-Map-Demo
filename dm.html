@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barovia Map DM View</title>
-  <link rel="stylesheet" href="assets/styles/main.css?v=20260605-5">
+  <link rel="stylesheet" href="assets/styles/main.css?v=20260927-2">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
-  <script src="assets/scripts/firebase-config.js?v=20260605-5"></script>
-  <script src="assets/scripts/main.js?v=20260605-5" defer></script>
+  <script src="assets/scripts/firebase-config.js?v=20260927-1"></script>
+  <script src="assets/scripts/main.js?v=20260927-2" defer></script>
 </head>
 <body data-view="dm">
   <main class="page">
@@ -93,17 +93,22 @@
     <section id="app-shell" class="map-shell" aria-labelledby="map-title" hidden>
       <section id="root-map-setup" class="root-map-setup" hidden>
         <h2>Set Campaign Starting Map</h2>
-        <p>This campaign is empty. Choose the first map that players should see from assets/images.</p>
+        <p>This campaign is empty. Choose an existing map or upload the first map that players should see.</p>
         <form id="root-map-form" class="campaign-admin__form">
           <label class="auth-form__field">
             <span>Map Title</span>
             <input id="root-map-title" type="text" maxlength="80" placeholder="World Map" required>
           </label>
           <label class="auth-form__field">
-            <span>Map Image</span>
-            <select id="root-map-image-file" required>
+            <span>Existing Map Image</span>
+            <select id="root-map-image-file">
               <option value="">Choose map image</option>
             </select>
+          </label>
+          <label class="auth-form__field">
+            <span>Upload New Map Image</span>
+            <input id="root-map-image-upload" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif">
+            <small class="image-upload-hint">A selected upload takes priority over the existing image above. Maximum 10 MB.</small>
           </label>
           <button class="auth-button auth-button--primary" type="submit">Set Starting Map</button>
         </form>
@@ -181,7 +186,7 @@
             </select>
           </label>
           <label class="dm-creator__field dm-creator__field--full">
-            <span>Image File Name</span>
+            <span>Existing Image</span>
             <select id="dm-marker-image-file">
               <option value="">No image</option>
               <option value="Arrigal.jpg">Arrigal.jpg</option>
@@ -217,6 +222,11 @@
               <option value="Yevgeni Krushkin.jpg">Yevgeni Krushkin.jpg</option>
             </select>
           </label>
+          <label class="dm-creator__field dm-creator__field--full">
+            <span>Upload New Image</span>
+            <input id="dm-marker-image-upload" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif">
+            <small class="image-upload-hint">Optional. A selected upload takes priority over the existing image above. Maximum 10 MB.</small>
+          </label>
           <label class="dm-creator__check">
             <input id="dm-marker-is-map" type="checkbox">
             <span>Big map marker</span>
@@ -227,7 +237,7 @@
               <input id="dm-marker-map-title" type="text" maxlength="80" placeholder="Optional, defaults to title">
             </label>
             <label class="dm-creator__field">
-              <span>Map Image File Name</span>
+              <span>Existing Map Image</span>
               <select id="dm-marker-map-image-file">
                 <option value="">Choose map image</option>
                 <option value="Arrigal.jpg">Arrigal.jpg</option>
@@ -262,6 +272,11 @@
                 <option value="The Baroness and the Baron.jpg">The Baroness and the Baron.jpg</option>
                 <option value="Yevgeni Krushkin.jpg">Yevgeni Krushkin.jpg</option>
               </select>
+            </label>
+            <label class="dm-creator__field">
+              <span>Upload New Map Image</span>
+              <input id="dm-marker-map-image-upload" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif">
+              <small class="image-upload-hint">A selected upload takes priority. Maximum 10 MB.</small>
             </label>
           </div>
           <label class="dm-creator__field dm-creator__field--full">
