@@ -10,6 +10,7 @@ const mapStage = document.getElementById("map-stage");
 const mapLayout = document.querySelector(".map-layout");
 const mapImage = document.getElementById("barovia-map");
 const mapFrame = document.querySelector(".map-frame");
+const mapLegendItems = document.getElementById("map-legend-items");
 const rootMapSetup = document.getElementById("root-map-setup");
 const rootMapForm = document.getElementById("root-map-form");
 const rootMapTitleInput = document.getElementById("root-map-title");
@@ -81,6 +82,22 @@ const ROOT_MAP = {
   alt: "Illustrated map of Barovia",
   title: "Map of Barovia"
 };
+const MARKER_ICON_DEFINITIONS = [
+  { id: "gate", label: "大门", fileName: "大门.png" },
+  { id: "village", label: "村庄", fileName: "村庄.png" },
+  { id: "town", label: "城镇", fileName: "城镇.png" },
+  { id: "manor", label: "庄园", fileName: "庄园.png" },
+  { id: "castle", label: "城堡", fileName: "城堡.png" },
+  { id: "temple", label: "神殿", fileName: "神殿.png" },
+  { id: "tent", label: "帐篷", fileName: "帐篷.png" },
+  { id: "hill", label: "山丘", fileName: "山丘.png" },
+  { id: "letter", label: "信件", fileName: "信件.png" },
+  { id: "point-of-interest", label: "兴趣点", fileName: "兴趣点.png" }
+].map((icon) => ({
+  ...icon,
+  src: `assets/icons/${encodeURIComponent(icon.fileName)}`
+}));
+const MARKER_ICON_BY_ID = new Map(MARKER_ICON_DEFINITIONS.map((icon) => [icon.id, icon]));
 const AUTH_CONFIG = window.APP_AUTH_CONFIG || {};
 const CLOUDINARY_CONFIG = window.CLOUDINARY_CONFIG || {};
 const USERNAME_DOMAIN = AUTH_CONFIG.usernameDomain || "barovia.local";
@@ -123,6 +140,7 @@ let firebaseAuth = null;
 let firebaseDatabase = null;
 let databaseRef = null;
 let customMarkersRef = null;
+let markerIconsRef = null;
 let rootMapRef = null;
 let playerDirectoryRef = null;
 let playerDirectoryConnected = false;
@@ -140,6 +158,7 @@ let placementModeActive = false;
 let markerSaveBusy = false;
 let campaignDeleteBusy = false;
 const customMarkers = {};
+const markerIconAssignments = {};
 
 function normalizeCampaignId(value) {
   return String(value || "").trim().toLowerCase();
@@ -210,6 +229,74 @@ function getMarkerScope(marker) {
 
 function getMarkerVisibilityKey(marker) {
   return `${getMarkerScope(marker)}:${marker.dataset.locationId}`;
+}
+
+function getMarkerIconStorageKey(marker) {
+  return encodeURIComponent(getMarkerVisibilityKey(marker));
+}
+
+function getAssignedMarkerIconId(marker) {
+  return markerIconAssignments[getMarkerIconStorageKey(marker)] || "";
+}
+
+function renderMapLegend() {
+  if (!mapLegendItems) {
+    return;
+  }
+
+  mapLegendItems.innerHTML = MARKER_ICON_DEFINITIONS.map((icon) => `
+    <div class="map-legend__item">
+      <img class="map-legend__icon" src="${icon.src}" alt="" aria-hidden="true" decoding="async">
+      <span>${escapeHtml(icon.label)}</span>
+    </div>
+  `).join("");
+}
+
+function applyMarkerIcon(marker) {
+  if (!marker || isPortraitMarker(marker)) {
+    return;
+  }
+
+  marker.querySelector(".map-marker__icon")?.remove();
+  const iconId = getAssignedMarkerIconId(marker);
+  const icon = MARKER_ICON_BY_ID.get(iconId);
+  marker.dataset.iconId = icon?.id || "";
+  marker.classList.toggle("map-marker--with-icon", !!icon);
+
+  if (!icon) {
+    return;
+  }
+
+  const image = document.createElement("img");
+  image.className = "map-marker__icon";
+  image.src = icon.src;
+  image.alt = "";
+  image.setAttribute("aria-hidden", "true");
+  image.decoding = "async";
+  marker.prepend(image);
+}
+
+function applyAllMarkerIcons() {
+  for (const marker of markerButtons) {
+    applyMarkerIcon(marker);
+  }
+}
+
+function applyMarkerIconsSnapshot(nextAssignments) {
+  for (const key of Object.keys(markerIconAssignments)) {
+    delete markerIconAssignments[key];
+  }
+
+  for (const [key, iconId] of Object.entries(nextAssignments || {})) {
+    if (typeof iconId === "string" && MARKER_ICON_BY_ID.has(iconId)) {
+      markerIconAssignments[key] = iconId;
+    }
+  }
+
+  applyAllMarkerIcons();
+  if (viewMode === "dm" && canAccessCurrentView() && !campaignPickerOpen) {
+    renderDmControls();
+  }
 }
 
 function isMarkerRevealed(marker) {
@@ -633,6 +720,185 @@ function renderInlineMarkerContent(marker) {
   `;
 }
 
+function updateMarkerIconPreview(previewImage, defaultPreview, iconId) {
+  const icon = MARKER_ICON_BY_ID.get(iconId);
+  previewImage.hidden = !icon;
+  defaultPreview.hidden = !!icon;
+
+  if (icon) {
+    previewImage.src = icon.src;
+    previewImage.alt = `${icon.label} marker icon preview`;
+  } else {
+    previewImage.removeAttribute("src");
+    previewImage.alt = "";
+  }
+}
+
+function renderMarkerIconEditor(marker) {
+  if (
+    viewMode !== "dm" ||
+    !isCampaignDm() ||
+    !markerIconsRef ||
+    !locationPanelBody ||
+    isPortraitMarker(marker)
+  ) {
+    return;
+  }
+
+  const editor = document.createElement("section");
+  editor.className = "marker-icon-editor";
+  editor.setAttribute("aria-labelledby", "marker-icon-editor-title");
+
+  const heading = document.createElement("div");
+  heading.className = "marker-icon-editor__heading";
+  heading.innerHTML = `
+    <p class="location-panel__eyebrow">DM only</p>
+    <h3 id="marker-icon-editor-title">Marker Icon</h3>
+    <p>Choose the symbol displayed on the map. This setting is shared with players in this campaign.</p>
+  `;
+
+  const form = document.createElement("form");
+  form.className = "marker-icon-editor__form";
+
+  const preview = document.createElement("div");
+  preview.className = "marker-icon-editor__preview";
+  const previewImage = document.createElement("img");
+  previewImage.className = "marker-icon-editor__preview-image";
+  const defaultPreview = document.createElement("span");
+  defaultPreview.className = "marker-icon-editor__default-preview";
+  defaultPreview.setAttribute("aria-label", "Default marker preview");
+  preview.append(previewImage, defaultPreview);
+
+  const field = document.createElement("label");
+  field.className = "marker-icon-editor__field";
+  const fieldLabel = document.createElement("span");
+  fieldLabel.textContent = "Map icon";
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "Map icon");
+  select.innerHTML = [
+    '<option value="">Default marker</option>',
+    ...MARKER_ICON_DEFINITIONS.map(
+      (icon) => `<option value="${escapeHtml(icon.id)}">${escapeHtml(icon.label)}</option>`
+    )
+  ].join("");
+  select.value = getAssignedMarkerIconId(marker);
+  field.append(fieldLabel, select);
+
+  const saveButton = document.createElement("button");
+  saveButton.type = "submit";
+  saveButton.className = "auth-button auth-button--primary";
+  saveButton.textContent = "Save Icon";
+
+  const status = document.createElement("p");
+  status.className = "marker-icon-editor__status";
+  status.hidden = true;
+  status.setAttribute("role", "status");
+
+  updateMarkerIconPreview(previewImage, defaultPreview, select.value);
+  select.addEventListener("change", () => {
+    updateMarkerIconPreview(previewImage, defaultPreview, select.value);
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!markerIconsRef || !isCampaignDm()) {
+      return;
+    }
+
+    const iconId = select.value;
+    if (iconId && !MARKER_ICON_BY_ID.has(iconId)) {
+      status.hidden = false;
+      status.dataset.state = "error";
+      status.textContent = "Choose a valid marker icon.";
+      return;
+    }
+
+    saveButton.disabled = true;
+    status.hidden = false;
+    status.dataset.state = "info";
+    status.textContent = "Saving marker icon...";
+
+    try {
+      const iconRef = markerIconsRef.child(getMarkerIconStorageKey(marker));
+      if (iconId) {
+        await iconRef.set(iconId);
+      } else {
+        await iconRef.remove();
+      }
+      status.dataset.state = "success";
+      status.textContent = iconId ? "Marker icon updated." : "Default marker restored.";
+    } catch (error) {
+      console.error("Unable to update marker icon.", error);
+      status.dataset.state = "error";
+      status.textContent = "Marker icon could not be saved. Check your Firebase rules.";
+    } finally {
+      saveButton.disabled = false;
+    }
+  });
+
+  form.append(preview, field, saveButton);
+  editor.append(heading, form, status);
+  locationPanelBody.prepend(editor);
+}
+
+async function showMarkerDetails(marker, options = {}) {
+  if (!canAccessCurrentView()) {
+    return;
+  }
+
+  const { iconOnly = false } = options;
+  const mapSrc = marker.dataset.mapSrc;
+  if (mapSrc && !iconOnly) {
+    await showMapImage(marker);
+    return;
+  }
+
+  const locationSrc = marker.dataset.locationSrc;
+  if (locationEyebrow) {
+    locationEyebrow.textContent = iconOnly
+      ? "DM Marker Settings"
+      : isPortraitMarker(marker)
+        ? "Selected Portrait"
+        : "Selected Location";
+  }
+  locationTitle.textContent = marker.dataset.locationName || (isPortraitMarker(marker) ? "Portrait" : "Location");
+  locationTitle.classList.toggle("location-panel__title--strahd", marker.dataset.locationId === "strahd-portrait");
+  locationPanelBody.innerHTML = iconOnly
+    ? '<p class="location-panel__status">Use the DM controls below to change this marker icon.</p>'
+    : '<p class="location-panel__status">Loading...</p>';
+  locationPanel.hidden = false;
+  locationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  if (iconOnly) {
+    renderMarkerIconEditor(marker);
+    return;
+  }
+
+  if (marker.dataset.inlineDescription || marker.dataset.imageSrc) {
+    renderInlineMarkerContent(marker);
+    renderMarkerIconEditor(marker);
+    return;
+  }
+
+  if (!locationSrc) {
+    renderMarkerFallback(marker);
+    renderMarkerIconEditor(marker);
+    return;
+  }
+
+  try {
+    const html = await loadLocationContent(locationSrc);
+    locationPanelBody.innerHTML = html;
+  } catch (error) {
+    locationPanelBody.innerHTML = isPortraitMarker(marker)
+      ? '<p class="location-panel__status">Failed to load character content.</p>'
+      : '<p class="location-panel__status">Failed to load location content.</p>';
+    console.error(error);
+  }
+
+  renderMarkerIconEditor(marker);
+}
+
 function attachMarkerClickHandler(marker) {
   if (marker.dataset.markerBound === "true") {
     return;
@@ -652,43 +918,7 @@ function attachMarkerClickHandler(marker) {
       return;
     }
 
-    const mapSrc = marker.dataset.mapSrc;
-    if (mapSrc) {
-      await showMapImage(marker);
-      return;
-    }
-
-    const locationSrc = marker.dataset.locationSrc;
-    if (locationEyebrow) {
-      locationEyebrow.textContent = isPortraitMarker(marker)
-        ? "Selected Portrait"
-        : "Selected Location";
-    }
-    locationTitle.textContent = marker.dataset.locationName || (isPortraitMarker(marker) ? "Portrait" : "Location");
-    locationTitle.classList.toggle("location-panel__title--strahd", marker.dataset.locationId === "strahd-portrait");
-    locationPanelBody.innerHTML = '<p class="location-panel__status">Loading...</p>';
-    locationPanel.hidden = false;
-    locationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
-
-    if (marker.dataset.inlineDescription || marker.dataset.imageSrc) {
-      renderInlineMarkerContent(marker);
-      return;
-    }
-
-    if (!locationSrc) {
-      renderMarkerFallback(marker);
-      return;
-    }
-
-    try {
-      const html = await loadLocationContent(locationSrc);
-      locationPanelBody.innerHTML = html;
-    } catch (error) {
-      locationPanelBody.innerHTML = isPortraitMarker(marker)
-        ? '<p class="location-panel__status">Failed to load character content.</p>'
-        : '<p class="location-panel__status">Failed to load location content.</p>';
-      console.error(error);
-    }
+    await showMarkerDetails(marker);
   });
 }
 
@@ -702,6 +932,7 @@ function registerMarkerElement(marker) {
   }
 
   attachMarkerClickHandler(marker);
+  applyMarkerIcon(marker);
 }
 
 function registerExistingMarkers() {
@@ -952,15 +1183,21 @@ function stopFirebaseSync() {
     customMarkersRef.off();
   }
 
+  if (markerIconsRef) {
+    markerIconsRef.off();
+  }
+
   if (rootMapRef) {
     rootMapRef.off();
   }
 
   databaseRef = null;
   customMarkersRef = null;
+  markerIconsRef = null;
   rootMapRef = null;
   firebaseReady = false;
   firebaseSyncStarted = false;
+  applyMarkerIconsSnapshot({});
 }
 
 function applyCampaignRootMap(rootMap) {
@@ -1022,6 +1259,7 @@ function initializeFirebaseSync() {
 
   databaseRef = firebaseDatabase.ref(getCampaignPath("maps/barovia/markerVisibility"));
   customMarkersRef = firebaseDatabase.ref(getCampaignPath("maps/barovia/customMarkers"));
+  markerIconsRef = firebaseDatabase.ref(getCampaignPath("maps/barovia/markerIcons"));
   rootMapRef = firebaseDatabase.ref(getCampaignPath("rootMap"));
   firebaseReady = true;
   firebaseSyncStarted = true;
@@ -1055,6 +1293,14 @@ function initializeFirebaseSync() {
   }, (error) => {
     console.warn("Unable to read custom markers from Firebase.", error);
     setDmMarkerStatus("Custom markers could not be loaded from Firebase.", "error");
+  });
+
+  markerIconsRef.on("value", (snapshot) => {
+    const data = snapshot.val();
+    applyMarkerIconsSnapshot(data && typeof data === "object" ? data : {});
+  }, (error) => {
+    console.warn("Unable to read marker icons from Firebase.", error);
+    setAuthMessage("Marker icons could not be loaded. Check your database rules.", "error");
   });
 }
 
@@ -1599,7 +1845,22 @@ function createDmControlItem(marker, container) {
   meta.className = "dm-marker-item__meta";
   const markerType = marker.dataset.locationType || "location";
   const markerKind = marker.dataset.mapSrc ? "Big Map" : formatMarkerType(markerType);
-  meta.textContent = `${markerKind} - ${marker.dataset.locationId || ""}`;
+  const assignedIcon = MARKER_ICON_BY_ID.get(getAssignedMarkerIconId(marker));
+  meta.textContent = `${markerKind} - ${marker.dataset.locationId || ""}${assignedIcon ? ` - ${assignedIcon.label}` : ""}`;
+
+  const actions = document.createElement("div");
+  actions.className = "dm-marker-item__actions";
+
+  if (!isPortraitMarker(marker)) {
+    const iconButton = document.createElement("button");
+    iconButton.type = "button";
+    iconButton.className = "dm-marker-item__icon";
+    iconButton.textContent = "Change Icon";
+    iconButton.addEventListener("click", () => {
+      showMarkerDetails(marker, { iconOnly: true });
+    });
+    actions.append(iconButton);
+  }
 
   const toggle = document.createElement("button");
   toggle.type = "button";
@@ -1610,7 +1871,7 @@ function createDmControlItem(marker, container) {
   });
 
   label.append(title, meta);
-  item.append(label, toggle);
+  actions.append(toggle);
 
   if (
     marker.classList.contains("map-marker--custom") ||
@@ -1623,8 +1884,10 @@ function createDmControlItem(marker, container) {
     removeButton.addEventListener("click", () => {
       deleteCustomMarker(marker);
     });
-    item.append(removeButton);
+    actions.append(removeButton);
   }
+
+  item.append(label, actions);
 
   container.append(item);
 
@@ -2084,7 +2347,11 @@ async function deleteCustomMarker(marker) {
   }
 
   try {
-    await customMarkersRef.child(markerId).remove();
+    const updates = {
+      [`${getCampaignPath("maps/barovia/customMarkers")}/${markerId}`]: null,
+      [`${getCampaignPath("maps/barovia/markerIcons")}/${getMarkerIconStorageKey(marker)}`]: null
+    };
+    await firebaseDatabase.ref().update(updates);
     delete markerVisibility[getMarkerVisibilityKey(marker)];
     saveMarkerVisibility();
     broadcastVisibilityState();
@@ -2552,6 +2819,7 @@ function initializeAuth() {
 
 window.addEventListener("resize", syncPortraitRailHeight);
 
+renderMapLegend();
 registerExistingMarkers();
 syncMapMarkerFields();
 loadImageFileOptions();

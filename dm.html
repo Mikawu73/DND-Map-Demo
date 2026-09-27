@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barovia Map DM View</title>
-  <link rel="stylesheet" href="assets/styles/main.css?v=20260927-2">
+  <link rel="stylesheet" href="assets/styles/main.css?v=20260927-3">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
   <script src="assets/scripts/firebase-config.js?v=20260927-1"></script>
-  <script src="assets/scripts/main.js?v=20260927-2" defer></script>
+  <script src="assets/scripts/main.js?v=20260927-3" defer></script>
 </head>
 <body data-view="dm">
   <main class="page">
@@ -127,10 +127,7 @@
 
         <section class="map-legend" aria-labelledby="map-legend-title">
           <p class="map-legend__title" id="map-legend-title">Legend</p>
-          <div class="map-legend__items">
-            <div class="map-legend__item"><span class="map-legend__swatch map-legend__swatch--location" aria-hidden="true"></span><span>Location</span></div>
-            <div class="map-legend__item"><span class="map-legend__swatch map-legend__swatch--information" aria-hidden="true"></span><span>Information</span></div>
-          </div>
+          <div id="map-legend-items" class="map-legend__items"></div>
         </section>
 
         <div class="map-layout">

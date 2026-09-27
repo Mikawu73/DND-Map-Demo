@@ -401,17 +401,28 @@ body {
 }
 
 .map-legend__items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 10px 14px;
 }
 
 .map-legend__item {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   color: var(--ink);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.map-legend__icon {
+  display: block;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 5px rgba(20, 14, 9, 0.2));
 }
 
 .map-legend__swatch {
@@ -639,6 +650,34 @@ body {
   box-shadow:
     0 0 0 6px rgba(93, 82, 73, 0.18),
     0 8px 16px rgba(0, 0, 0, 0.22);
+}
+
+.map-marker.map-marker--with-icon {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.map-marker.map-marker--with-icon::after {
+  display: none;
+}
+
+.map-marker__icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 4px rgba(20, 14, 9, 0.28));
+}
+
+.map-marker--with-icon.map-marker--dm-hidden {
+  background: transparent;
+  filter: grayscale(0.7);
 }
 
 .map-marker:hover,
@@ -976,6 +1015,13 @@ body {
   min-width: 0;
 }
 
+.dm-marker-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .dm-marker-item__title,
 .dm-marker-item__meta {
   margin: 0;
@@ -1006,6 +1052,19 @@ body {
   cursor: pointer;
 }
 
+.dm-marker-item__icon {
+  flex-shrink: 0;
+  min-width: 112px;
+  padding: 10px 14px;
+  font-size: 0.92rem;
+  line-height: 1.2;
+  color: #2d160f;
+  background: rgba(255, 247, 222, 0.95);
+  border: 1px solid rgba(45, 22, 15, 0.28);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
 .dm-marker-item__delete {
   flex-shrink: 0;
   min-width: 96px;
@@ -1025,6 +1084,7 @@ body {
 }
 
 .dm-marker-item__toggle:focus-visible,
+.dm-marker-item__icon:focus-visible,
 .dm-marker-item__delete:focus-visible {
   outline: 2px solid #2d160f;
   outline-offset: 3px;
@@ -1071,6 +1131,108 @@ body {
   padding: 18px;
   border: 1px dashed rgba(89, 72, 59, 0.45);
   background: rgba(255, 251, 243, 0.75);
+}
+
+.marker-icon-editor {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid rgba(89, 72, 59, 0.28);
+  border-radius: 16px;
+  background: rgba(240, 222, 184, 0.52);
+}
+
+.marker-icon-editor__heading h3,
+.marker-icon-editor__heading p {
+  margin: 0;
+}
+
+.marker-icon-editor__heading h3 {
+  font-size: 1.15rem;
+}
+
+.marker-icon-editor__heading > p:last-child {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.marker-icon-editor__form {
+  display: grid;
+  grid-template-columns: 64px minmax(180px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.marker-icon-editor__preview {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+}
+
+.marker-icon-editor__preview-image {
+  display: block;
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 5px rgba(20, 14, 9, 0.22));
+}
+
+.marker-icon-editor__preview-image[hidden],
+.marker-icon-editor__default-preview[hidden] {
+  display: none;
+}
+
+.marker-icon-editor__default-preview {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #fff7de;
+  border-radius: 999px;
+  background: #8f2d23;
+  box-shadow: 0 0 0 5px rgba(143, 45, 35, 0.22);
+}
+
+.marker-icon-editor__field {
+  display: grid;
+  gap: 7px;
+}
+
+.marker-icon-editor__field span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.marker-icon-editor__field select {
+  width: 100%;
+  padding: 11px 13px;
+  color: var(--ink);
+  font: inherit;
+  border: 1px solid rgba(89, 72, 59, 0.28);
+  border-radius: 12px;
+  background: rgba(255, 251, 243, 0.96);
+}
+
+.marker-icon-editor__status {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: var(--muted);
+  background: rgba(255, 251, 243, 0.74);
+}
+
+.marker-icon-editor__status[data-state="success"] {
+  color: #204c1f;
+  background: rgba(231, 247, 228, 0.86);
+}
+
+.marker-icon-editor__status[data-state="error"] {
+  color: #6c1515;
+  background: rgba(255, 231, 231, 0.86);
 }
 
 .character-profile--strahd {
@@ -1246,6 +1408,11 @@ body {
     height: 24px;
   }
 
+  .map-marker.map-marker--with-icon {
+    width: 40px;
+    height: 40px;
+  }
+
   .marker-toggle,
   .map-return,
   .auth-button {
@@ -1268,6 +1435,7 @@ body {
   }
 
   .dm-marker-item__toggle,
+  .dm-marker-item__icon,
   .dm-marker-item__delete {
     width: 100%;
     min-width: 0;
@@ -1276,6 +1444,20 @@ body {
   .location-panel__body {
     min-height: 140px;
     padding: 14px;
+  }
+
+  .marker-icon-editor__form {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .marker-icon-editor__form .auth-button {
+    grid-column: 1 / -1;
+  }
+
+  .marker-icon-editor__preview,
+  .marker-icon-editor__preview-image {
+    width: 56px;
+    height: 56px;
   }
 
   .location-panel__image--side {
