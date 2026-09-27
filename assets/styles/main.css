@@ -1235,6 +1235,30 @@ body {
   background: rgba(255, 231, 231, 0.86);
 }
 
+.map-marker-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid rgba(89, 72, 59, 0.24);
+  border-radius: 16px;
+  background: rgba(255, 251, 243, 0.86);
+}
+
+.map-marker-navigation__copy p {
+  margin: 0;
+}
+
+.map-marker-navigation__copy p:last-child {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.map-marker-navigation .auth-button {
+  flex-shrink: 0;
+}
+
 .character-profile--strahd {
   position: relative;
   padding: 18px;
@@ -1458,6 +1482,15 @@ body {
   .marker-icon-editor__preview-image {
     width: 56px;
     height: 56px;
+  }
+
+  .map-marker-navigation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .map-marker-navigation .auth-button {
+    width: 100%;
   }
 
   .location-panel__image--side {

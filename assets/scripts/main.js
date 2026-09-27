@@ -841,6 +841,42 @@ function renderMarkerIconEditor(marker) {
   locationPanelBody.prepend(editor);
 }
 
+function renderMapMarkerNavigation(marker) {
+  if (!locationPanelBody || !marker.dataset.mapSrc) {
+    return;
+  }
+
+  const targetTitle = marker.dataset.targetMapTitle || marker.dataset.locationName || "Map";
+  const navigation = document.createElement("section");
+  navigation.className = "map-marker-navigation";
+
+  const copy = document.createElement("div");
+  copy.className = "map-marker-navigation__copy";
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "location-panel__eyebrow";
+  eyebrow.textContent = "Linked Map";
+  const description = document.createElement("p");
+  description.textContent = `This marker opens ${targetTitle}. You can enter the map after changing its icon.`;
+  copy.append(eyebrow, description);
+
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.className = "auth-button auth-button--primary";
+  openButton.textContent = `Open ${targetTitle}`;
+  openButton.addEventListener("click", async () => {
+    openButton.disabled = true;
+    try {
+      await showMapImage(marker);
+      mapFrame?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } finally {
+      openButton.disabled = false;
+    }
+  });
+
+  navigation.append(copy, openButton);
+  locationPanelBody.append(navigation);
+}
+
 async function showMarkerDetails(marker, options = {}) {
   if (!canAccessCurrentView()) {
     return;
@@ -848,7 +884,7 @@ async function showMarkerDetails(marker, options = {}) {
 
   const { iconOnly = false } = options;
   const mapSrc = marker.dataset.mapSrc;
-  if (mapSrc && !iconOnly) {
+  if (mapSrc && !iconOnly && viewMode === "player") {
     await showMapImage(marker);
     return;
   }
@@ -857,19 +893,29 @@ async function showMarkerDetails(marker, options = {}) {
   if (locationEyebrow) {
     locationEyebrow.textContent = iconOnly
       ? "DM Marker Settings"
-      : isPortraitMarker(marker)
-        ? "Selected Portrait"
-        : "Selected Location";
+      : mapSrc
+        ? "DM Map Entrance"
+        : isPortraitMarker(marker)
+          ? "Selected Portrait"
+          : "Selected Location";
   }
   locationTitle.textContent = marker.dataset.locationName || (isPortraitMarker(marker) ? "Portrait" : "Location");
   locationTitle.classList.toggle("location-panel__title--strahd", marker.dataset.locationId === "strahd-portrait");
   locationPanelBody.innerHTML = iconOnly
     ? '<p class="location-panel__status">Use the DM controls below to change this marker icon.</p>'
-    : '<p class="location-panel__status">Loading...</p>';
+    : mapSrc
+      ? ""
+      : '<p class="location-panel__status">Loading...</p>';
   locationPanel.hidden = false;
   locationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 
   if (iconOnly) {
+    renderMarkerIconEditor(marker);
+    return;
+  }
+
+  if (mapSrc) {
+    renderMapMarkerNavigation(marker);
     renderMarkerIconEditor(marker);
     return;
   }
