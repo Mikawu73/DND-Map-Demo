@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Barovia Map DM View</title>
-  <link rel="stylesheet" href="assets/styles/main.css?v=20260927-4">
+  <link rel="stylesheet" href="assets/styles/main.css?v=20260927-5">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
   <script src="assets/scripts/firebase-config.js?v=20260927-1"></script>
-  <script src="assets/scripts/main.js?v=20260927-4" defer></script>
+  <script src="assets/scripts/main.js?v=20260927-5" defer></script>
 </head>
 <body data-view="dm">
   <main class="page">
@@ -177,8 +177,16 @@
           <label class="dm-creator__field">
             <span>Type</span>
             <select id="dm-marker-type">
-              <option value="location">Location</option>
-              <option value="information">Information</option>
+              <option value="point-of-interest">兴趣点</option>
+              <option value="gate">大门</option>
+              <option value="village">村庄</option>
+              <option value="town">城镇</option>
+              <option value="manor">庄园</option>
+              <option value="castle">城堡</option>
+              <option value="temple">神殿</option>
+              <option value="tent">帐篷</option>
+              <option value="hill">山丘</option>
+              <option value="letter">信件</option>
               <option value="npc">NPC</option>
             </select>
           </label>

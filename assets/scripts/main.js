@@ -98,6 +98,7 @@ const MARKER_ICON_DEFINITIONS = [
   src: `assets/icons/${encodeURIComponent(icon.fileName)}`
 }));
 const MARKER_ICON_BY_ID = new Map(MARKER_ICON_DEFINITIONS.map((icon) => [icon.id, icon]));
+const DEFAULT_MARKER_TYPE_ID = "point-of-interest";
 const AUTH_CONFIG = window.APP_AUTH_CONFIG || {};
 const CLOUDINARY_CONFIG = window.CLOUDINARY_CONFIG || {};
 const USERNAME_DOMAIN = AUTH_CONFIG.usernameDomain || "barovia.local";
@@ -1864,6 +1865,11 @@ function syncDmControl(marker, container) {
 }
 
 function formatMarkerType(type) {
+  const iconType = MARKER_ICON_BY_ID.get(type);
+  if (iconType) {
+    return iconType.label;
+  }
+
   switch (type) {
     case "information":
       return "Information";
@@ -1892,7 +1898,8 @@ function createDmControlItem(marker, container) {
   const markerType = marker.dataset.locationType || "location";
   const markerKind = marker.dataset.mapSrc ? "Big Map" : formatMarkerType(markerType);
   const assignedIcon = MARKER_ICON_BY_ID.get(getAssignedMarkerIconId(marker));
-  meta.textContent = `${markerKind} - ${marker.dataset.locationId || ""}${assignedIcon ? ` - ${assignedIcon.label}` : ""}`;
+  const iconLabel = assignedIcon && assignedIcon.label !== markerKind ? ` - ${assignedIcon.label}` : "";
+  meta.textContent = `${markerKind} - ${marker.dataset.locationId || ""}${iconLabel}`;
 
   const actions = document.createElement("div");
   actions.className = "dm-marker-item__actions";
@@ -2169,7 +2176,7 @@ function clampPercentage(value) {
 async function buildCustomMarkerRecord(position = null) {
   const title = dmMarkerTitleInput?.value.trim() || "";
   const description = dmMarkerDescriptionInput?.value.trim() || "";
-  const markerType = dmMarkerTypeInput?.value || "location";
+  const markerType = dmMarkerTypeInput?.value || DEFAULT_MARKER_TYPE_ID;
   const visible = dmMarkerVisibleInput?.checked ?? true;
   const imageUploadFile = dmMarkerImageUploadInput?.files?.[0] || null;
   let imageFileName = normalizeImageFileName(dmMarkerImageFileInput?.value || "");
@@ -2181,6 +2188,11 @@ async function buildCustomMarkerRecord(position = null) {
   let mapImageFileName = normalizeImageFileName(dmMarkerMapImageFileInput?.value || "");
   let mapSrc = getImagePathFromFileName(mapImageFileName);
   const targetMapId = getMapIdFromTitle(targetMapTitle);
+
+  if (markerType !== "npc" && !MARKER_ICON_BY_ID.has(markerType)) {
+    setDmMarkerStatus("Choose a valid marker type.", "error");
+    return null;
+  }
 
   if (!title) {
     setDmMarkerStatus(isNpcMarker ? "Add a title before creating the NPC." : "Add a title before placing the marker.", "error");
@@ -2307,14 +2319,22 @@ function resetDmMarkerForm() {
     dmMarkerVisibleInput.checked = true;
   }
   if (dmMarkerTypeInput) {
-    dmMarkerTypeInput.value = "location";
+    dmMarkerTypeInput.value = DEFAULT_MARKER_TYPE_ID;
   }
   syncMapMarkerFields();
 }
 
 async function saveCustomMarker(markerRef, markerRecord, successMessage) {
   try {
-    await markerRef.set(markerRecord);
+    const markerId = markerRef.key;
+    const updates = {
+      [`${getCampaignPath("maps/barovia/customMarkers")}/${markerId}`]: markerRecord
+    };
+    if (MARKER_ICON_BY_ID.has(markerRecord.type)) {
+      const markerIconKey = encodeURIComponent(getCustomMarkerVisibilityKey(markerRecord));
+      updates[`${getCampaignPath("maps/barovia/markerIcons")}/${markerIconKey}`] = markerRecord.type;
+    }
+    await firebaseDatabase.ref().update(updates);
     markerVisibility[getCustomMarkerVisibilityKey(markerRecord)] = markerRecord.visible !== false;
     saveMarkerVisibility();
     broadcastVisibilityState();
