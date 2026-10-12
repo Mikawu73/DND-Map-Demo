@@ -3,31 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Barovia Map DM View</title>
-  <link rel="stylesheet" href="assets/styles/main.css?v=20260927-5">
+  <title data-i18n="DND Map · DM">DND Map · DM</title>
+  <link rel="stylesheet" href="assets/styles/main.css?v=20261011-1">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
   <script src="assets/scripts/firebase-config.js?v=20260927-1"></script>
-  <script src="assets/scripts/main.js?v=20260927-5" defer></script>
+  <script src="assets/scripts/i18n.js?v=20261011-1" defer></script>
+  <script src="assets/scripts/main.js?v=20261011-1" defer></script>
 </head>
 <body data-view="dm">
   <main class="page">
+    <div class="account-bar">
+      <button type="button" id="language-toggle" class="auth-button language-toggle" aria-label="Switch to Chinese">中文</button>
+      <button type="button" id="user-center-open" class="auth-button account-button" aria-haspopup="dialog" aria-controls="user-center" hidden>
+        <span id="user-center-name" class="account-button__name"></span><span data-i18n="User Center">User Center</span>
+      </button>
+    </div>
+    <dialog id="user-center" class="user-center" aria-labelledby="user-center-title">
+      <div class="user-center__header">
+        <h2 id="user-center-title" data-i18n="User Center">User Center</h2>
+        <button type="button" id="user-center-close" class="user-center__close" aria-label="Close user center" data-i18n-aria-label="Close user center">×</button>
+      </div>
+      <p class="user-center__intro" data-i18n="Let your party know what to call you.">Let your party know what to call you.</p>
+      <form id="display-name-form" class="user-center__form">
+        <label class="auth-form__field">
+          <span data-i18n="Display Name">Display Name</span>
+          <input id="display-name-input" type="text" minlength="1" maxlength="24" required autocomplete="nickname" aria-describedby="display-name-help">
+        </label>
+        <p id="display-name-help" class="user-center__hint" data-i18n="1–24 characters. Your profile and player lists use this name; your sign-in username stays the same.">1–24 characters. Your profile and player lists use this name; your sign-in username stays the same.</p>
+        <label class="auth-form__field">
+          <span data-i18n="Sign-in Username">Sign-in Username</span>
+          <input id="profile-username" type="text" readonly aria-describedby="profile-username-help">
+        </label>
+        <p id="profile-username-help" class="user-center__hint" data-i18n="Used to sign in and identify your account. It cannot be changed here.">Used to sign in and identify your account. It cannot be changed here.</p>
+        <label class="display-name-form__check">
+          <input id="display-name-visible" type="checkbox" checked>
+          <span data-i18n="Show me in campaign player lists when I join as a player">Show me in campaign player lists when I join as a player</span>
+        </label>
+        <p id="display-name-status" class="display-name-status" role="status" aria-live="polite" hidden></p>
+        <button type="submit" id="display-name-save" class="auth-button auth-button--primary" data-i18n="Save Changes">Save Changes</button>
+      </form>
+    </dialog>
     <header class="hero">
-      <p class="eyebrow">Curse of Strahd</p>
-      <h1>Barovia</h1>
-      <p class="intro" id="view-intro">
-        DM view: reveal or hide each map marker, then share the player view.
+      <p class="eyebrow" data-i18n="Your world · Your adventure">Your world · Your adventure</p>
+      <h1 data-i18n="DND Map">DND Map</h1>
+      <p class="intro" id="view-intro" data-i18n="Build your world, manage maps and players, and reveal your adventure one location at a time.">
+        Build your world, manage maps and players, and reveal your adventure one location at a time.
       </p>
     </header>
 
     <section id="auth-panel" class="auth-shell" aria-labelledby="auth-title">
       <div class="auth-shell__card">
         <div class="auth-shell__header">
-          <p class="eyebrow">Dungeon Master Access</p>
-          <h2 id="auth-title">Admin sign-in required</h2>
-          <p id="auth-copy" class="auth-shell__copy">
-            Only the admin account can open the DM controls for this page.
+          <h2 id="auth-title" data-i18n="DM View">DM View</h2>
+          <p id="auth-copy" class="auth-shell__copy" data-i18n="Every registered user can create campaigns and manage their own maps and players.">
+            Every registered user can create campaigns and manage their own maps and players.
           </p>
         </div>
 
@@ -35,54 +66,55 @@
 
         <form id="auth-form" class="auth-form">
           <label class="auth-form__field">
-            <span>Username</span>
+            <span data-i18n="Username">Username</span>
             <input id="auth-username" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" required>
           </label>
 
           <label class="auth-form__field">
-            <span>Password</span>
+            <span data-i18n="Password">Password</span>
             <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="6" required>
           </label>
 
           <div class="auth-form__actions">
-            <button type="submit" id="auth-signin" class="auth-button auth-button--primary">Sign In</button>
-            <button type="button" id="auth-signup" class="auth-button">Create Account</button>
+            <button type="submit" id="auth-signin" class="auth-button auth-button--primary" data-i18n="Sign In">Sign In</button>
+            <button type="button" id="auth-signup" class="auth-button" data-i18n="Create Account">Create Account</button>
           </div>
         </form>
 
         <div id="session-panel" class="session-panel" hidden>
           <p id="session-summary" class="session-panel__summary"></p>
           <div class="session-panel__actions">
-            <a id="player-link" class="auth-button" href="index.html">Open Player View</a>
-            <button type="button" id="auth-signout" class="auth-button">Sign Out</button>
+            <a id="player-link" class="auth-button" href="index.html" data-i18n="Player Preview">Player Preview</a>
+            <button type="button" id="auth-signout" class="auth-button" data-i18n="Sign Out">Sign Out</button>
           </div>
         </div>
 
         <section id="campaign-panel" class="campaign-panel" hidden>
           <div class="campaign-panel__header">
-            <h3>Managed Campaigns</h3>
-            <p>Select a campaign to manage its map and players.</p>
+            <h3 data-i18n="Managed Campaigns">Managed Campaigns</h3>
+            <p data-i18n="Choose a campaign to manage its maps and players, or create a new world.">Choose a campaign to manage its maps and players, or create a new world.</p>
           </div>
           <div id="campaign-list" class="campaign-list"></div>
           <section id="campaign-admin" class="campaign-admin" hidden>
             <form id="campaign-create-form" class="campaign-admin__form">
               <label class="auth-form__field">
-                <span>New Campaign Name</span>
-                <input id="campaign-name" type="text" maxlength="60" placeholder="New adventure" required>
+                <span data-i18n="New Campaign Name">New Campaign Name</span>
+                <input id="campaign-name" type="text" maxlength="60" placeholder="e.g. The Lost Isles" required data-i18n-placeholder="e.g. The Lost Isles">
               </label>
-              <button class="auth-button auth-button--primary" type="submit">Create Campaign</button>
+              <button class="auth-button auth-button--primary" type="submit" data-i18n="Create Campaign">Create Campaign</button>
             </form>
+            <h3 id="campaign-management-title" hidden></h3>
             <form id="campaign-invite-form" class="campaign-admin__form" hidden>
               <label class="auth-form__field">
-                <span>Select Existing Player</span>
+                <span data-i18n="Add a Registered Player">Add a Registered Player</span>
                 <select id="campaign-invite-player" required>
-                  <option value="">Select a player</option>
+                  <option value="" data-i18n="Select a player">Select a player</option>
                 </select>
               </label>
-              <button class="auth-button" type="submit">Add To Selected Campaign</button>
+              <button class="auth-button" type="submit" data-i18n="Add to Campaign">Add to Campaign</button>
             </form>
             <section id="campaign-members" class="campaign-members" hidden>
-              <h4>Current Players</h4>
+              <h4 data-i18n="Current Players">Current Players</h4>
               <div id="campaign-member-list" class="campaign-member-list"></div>
             </section>
           </section>
@@ -92,41 +124,42 @@
 
     <section id="app-shell" class="map-shell" aria-labelledby="map-title" hidden>
       <section id="root-map-setup" class="root-map-setup" hidden>
-        <h2>Set Campaign Starting Map</h2>
-        <p>This campaign is empty. Choose an existing map or upload the first map that players should see.</p>
+        <h2 data-i18n="Set Campaign Starting Map">Set Campaign Starting Map</h2>
+        <p data-i18n="Welcome to your new campaign. Upload a starting map, then add locations, NPCs, and linked maps.">Welcome to your new campaign. Upload a starting map, then add locations, NPCs, and linked maps.</p>
         <form id="root-map-form" class="campaign-admin__form">
           <label class="auth-form__field">
-            <span>Map Title</span>
-            <input id="root-map-title" type="text" maxlength="80" placeholder="World Map" required>
+            <span data-i18n="Map Name">Map Name</span>
+            <input id="root-map-title" type="text" maxlength="80" placeholder="World Map" required data-i18n-placeholder="World Map">
           </label>
           <label class="auth-form__field">
-            <span>Existing Map Image</span>
+            <span data-i18n="Existing Map Image">Existing Map Image</span>
             <select id="root-map-image-file">
-              <option value="">Choose map image</option>
+              <option value="" data-i18n="Choose map image">Choose map image</option>
             </select>
           </label>
           <label class="auth-form__field">
-            <span>Upload New Map Image</span>
+            <span data-i18n="Upload New Map Image">Upload New Map Image</span>
             <input id="root-map-image-upload" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif">
-            <small class="image-upload-hint">A selected upload takes priority over the existing image above. Maximum 10 MB.</small>
+            <small class="image-upload-hint" data-i18n="A selected upload takes priority over the existing image above. Maximum 10 MB.">A selected upload takes priority over the existing image above. Maximum 10 MB.</small>
           </label>
-          <button class="auth-button auth-button--primary" type="submit">Set Starting Map</button>
+          <button class="auth-button auth-button--primary" type="submit" data-i18n="Set Starting Map">Set Starting Map</button>
         </form>
         <p id="root-map-status" class="display-name-status" hidden></p>
       </section>
       <div class="map-frame">
         <div class="map-frame__topbar">
-          <h2 id="map-title">Map of Barovia</h2>
+          <h2 id="map-title">Campaign Map</h2>
           <div class="map-frame__actions">
-            <button type="button" id="map-return" class="map-return" hidden>Return to Barovia</button>
-            <button type="button" id="marker-toggle" class="marker-toggle" aria-pressed="true">Hide Markers</button>
-            <button type="button" id="campaign-switch" class="map-return">Campaigns</button>
-            <button type="button" id="app-signout" class="map-return" hidden>Sign Out</button>
+            <button type="button" id="map-return" class="map-return" hidden data-i18n="Return to Parent Map">Return to Parent Map</button>
+            <button type="button" id="marker-toggle" class="marker-toggle" aria-pressed="true" data-i18n="Hide Markers">Hide Markers</button>
+            <a id="map-view-switch" class="map-return" href="index.html" hidden data-i18n="Player Preview">Player Preview</a>
+            <button type="button" id="campaign-switch" class="map-return" data-i18n="Campaigns">Campaigns</button>
+            <button type="button" id="app-signout" class="map-return" hidden data-i18n="Sign Out">Sign Out</button>
           </div>
         </div>
 
         <section class="map-legend" aria-labelledby="map-legend-title">
-          <p class="map-legend__title" id="map-legend-title">Legend</p>
+          <p class="map-legend__title" id="map-legend-title" data-i18n="Legend">Legend</p>
           <div id="map-legend-items" class="map-legend__items"></div>
         </section>
 
@@ -145,7 +178,7 @@
             <button type="button" class="map-marker map-marker--location" style="left: 26.88%; top: 29.58%;" data-map-id="village-of-barovia" data-location-id="church" data-location-name="教堂" data-location-src="content/locations/church.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 教堂"></button>
           </div>
 
-          <aside id="portrait-rail" class="portrait-rail" aria-label="Character portraits" hidden>
+          <aside id="portrait-rail" class="portrait-rail" aria-label="Character portraits" hidden data-i18n-aria-label="Character portraits">
             <button type="button" class="portrait-marker portrait-marker--strahd" data-map-id="barovia" data-location-id="strahd-portrait" data-location-name="Strahd•Von•Zarovich" data-location-type="portrait" data-image-src="assets/images/Count%20Strahd%20von%20Zarovich.jpg" data-image-alt="Portrait of Strahd•Von•Zarovich" data-location-src="content/characters/strahd.html" aria-controls="location-panel" aria-label="Show portrait of Strahd•Von•Zarovich"><img src="assets/images/Count%20Strahd%20von%20Zarovich.jpg" alt="Strahd•Von•Zarovich"><span>Strahd•Von•Zarovich</span></button>
             <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="donavich-portrait" data-location-name="Donavich" data-location-type="portrait" data-image-src="assets/images/Donavich.jpg" data-image-alt="Portrait of Donavich" data-location-src="content/characters/donavich.html" aria-controls="location-panel" aria-label="Show portrait of Donavich"><img src="assets/images/Donavich.jpg" alt="Donavich"><span>Donavich</span></button>
             <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="doru-portrait" data-location-name="Doru" data-location-type="portrait" data-image-src="assets/images/Doru.jpg" data-image-alt="Portrait of Doru" data-location-src="content/characters/doru.html" aria-controls="location-panel" aria-label="Show portrait of Doru"><img src="assets/images/Doru.jpg" alt="Doru"><span>Doru</span></button>
@@ -160,40 +193,40 @@
 
     <section id="dm-controls" class="dm-panel" aria-labelledby="dm-controls-title" hidden>
       <div class="dm-panel__header">
-        <p class="location-panel__eyebrow">Dungeon Master</p>
-        <h2 id="dm-controls-title">Marker Visibility</h2>
+        <p class="location-panel__eyebrow" data-i18n="Dungeon Master">Dungeon Master</p>
+        <h2 id="dm-controls-title" data-i18n="Marker Visibility">Marker Visibility</h2>
       </div>
-      <p class="dm-panel__intro">Choose which locations and portraits are revealed to players. These settings are stored in this browser.</p>
+      <p class="dm-panel__intro" data-i18n="Choose which locations and portraits are revealed to players. These settings are synchronized with campaign members.">Choose which locations and portraits are revealed to players. These settings are synchronized with campaign members.</p>
       <section class="dm-creator" aria-labelledby="dm-creator-title">
         <div class="dm-creator__header">
-          <h3 id="dm-creator-title" class="dm-marker-group__title">Create Marker</h3>
-          <p class="dm-creator__intro">Fill in the marker details, then click the map to place it on the current view.</p>
+          <h3 id="dm-creator-title" class="dm-marker-group__title" data-i18n="Create Marker">Create Marker</h3>
+          <p class="dm-creator__intro" data-i18n="Fill in the marker details, then click the map to place it on the current view.">Fill in the marker details, then click the map to place it on the current view.</p>
         </div>
         <form id="dm-marker-form" class="dm-creator__form">
           <label class="dm-creator__field">
-            <span>Title</span>
-            <input id="dm-marker-title" type="text" maxlength="80" placeholder="New marker title" required>
+            <span data-i18n="Title">Title</span>
+            <input id="dm-marker-title" type="text" maxlength="80" placeholder="New marker title" required data-i18n-placeholder="New marker title">
           </label>
           <label class="dm-creator__field">
-            <span>Type</span>
+            <span data-i18n="Type">Type</span>
             <select id="dm-marker-type">
-              <option value="point-of-interest">兴趣点</option>
-              <option value="gate">大门</option>
-              <option value="village">村庄</option>
-              <option value="town">城镇</option>
-              <option value="manor">庄园</option>
-              <option value="castle">城堡</option>
-              <option value="temple">神殿</option>
-              <option value="tent">帐篷</option>
-              <option value="hill">山丘</option>
-              <option value="letter">信件</option>
-              <option value="npc">NPC</option>
+              <option value="point-of-interest" data-i18n="Point of Interest">Point of Interest</option>
+              <option value="gate" data-i18n="Gate">Gate</option>
+              <option value="village" data-i18n="Village">Village</option>
+              <option value="town" data-i18n="Town">Town</option>
+              <option value="manor" data-i18n="Manor">Manor</option>
+              <option value="castle" data-i18n="Castle">Castle</option>
+              <option value="temple" data-i18n="Temple">Temple</option>
+              <option value="tent" data-i18n="Tent">Tent</option>
+              <option value="hill" data-i18n="Hill">Hill</option>
+              <option value="letter" data-i18n="Letter">Letter</option>
+              <option value="npc" data-i18n="NPC">NPC</option>
             </select>
           </label>
           <label class="dm-creator__field dm-creator__field--full">
-            <span>Existing Image</span>
+            <span data-i18n="Existing Image">Existing Image</span>
             <select id="dm-marker-image-file">
-              <option value="">No image</option>
+              <option value="" data-i18n="No image">No image</option>
               <option value="Arrigal.jpg">Arrigal.jpg</option>
               <option value="Card Layout.jpg">Card Layout.jpg</option>
               <option value="Count Strahd von Zarovich.jpg">Count Strahd von Zarovich.jpg</option>
@@ -228,23 +261,23 @@
             </select>
           </label>
           <label class="dm-creator__field dm-creator__field--full">
-            <span>Upload New Image</span>
+            <span data-i18n="Upload New Image">Upload New Image</span>
             <input id="dm-marker-image-upload" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif">
-            <small class="image-upload-hint">Optional. A selected upload takes priority over the existing image above. Maximum 10 MB.</small>
+            <small class="image-upload-hint" data-i18n="Optional. A selected upload takes priority over the existing image above. Maximum 10 MB.">Optional. A selected upload takes priority over the existing image above. Maximum 10 MB.</small>
           </label>
           <label class="dm-creator__check">
             <input id="dm-marker-is-map" type="checkbox">
-            <span>Big map marker</span>
+            <span data-i18n="Big map marker">Big map marker</span>
           </label>
           <div id="dm-marker-map-fields" class="dm-creator__map-fields" hidden>
             <label class="dm-creator__field">
-              <span>Map Name</span>
-              <input id="dm-marker-map-title" type="text" maxlength="80" placeholder="Optional, defaults to title">
+              <span data-i18n="Map Name">Map Name</span>
+              <input id="dm-marker-map-title" type="text" maxlength="80" placeholder="Optional, defaults to title" data-i18n-placeholder="Optional, defaults to title">
             </label>
             <label class="dm-creator__field">
-              <span>Existing Map Image</span>
+              <span data-i18n="Existing Map Image">Existing Map Image</span>
               <select id="dm-marker-map-image-file">
-                <option value="">Choose map image</option>
+                <option value="" data-i18n="Choose map image">Choose map image</option>
                 <option value="Arrigal.jpg">Arrigal.jpg</option>
                 <option value="Card Layout.jpg">Card Layout.jpg</option>
                 <option value="Count Strahd von Zarovich.jpg">Count Strahd von Zarovich.jpg</option>
@@ -279,32 +312,32 @@
               </select>
             </label>
             <label class="dm-creator__field">
-              <span>Upload New Map Image</span>
+              <span data-i18n="Upload New Map Image">Upload New Map Image</span>
               <input id="dm-marker-map-image-upload" type="file" accept=".jpg,.jpeg,.png,.webp,.gif,.avif,image/jpeg,image/png,image/webp,image/gif,image/avif">
-              <small class="image-upload-hint">A selected upload takes priority. Maximum 10 MB.</small>
+              <small class="image-upload-hint" data-i18n="A selected upload takes priority. Maximum 10 MB.">A selected upload takes priority. Maximum 10 MB.</small>
             </label>
           </div>
           <label class="dm-creator__field dm-creator__field--full">
-            <span>Description</span>
-            <textarea id="dm-marker-description" rows="4" placeholder="Add notes for players and yourself."></textarea>
+            <span data-i18n="Description">Description</span>
+            <textarea id="dm-marker-description" rows="4" placeholder="Add notes for players and yourself." data-i18n-placeholder="Add notes for players and yourself."></textarea>
           </label>
           <label class="dm-creator__check">
             <input id="dm-marker-visible" type="checkbox" checked>
-            <span>Visible to players immediately</span>
+            <span data-i18n="Visible to players immediately">Visible to players immediately</span>
           </label>
           <div class="dm-creator__actions">
-            <button type="button" id="dm-marker-place" class="dm-marker-item__toggle" aria-pressed="false">Place Marker On Map</button>
+            <button type="button" id="dm-marker-place" class="dm-marker-item__toggle" aria-pressed="false" data-i18n="Place Marker On Map">Place Marker On Map</button>
           </div>
         </form>
         <p id="dm-marker-status" class="dm-creator__status" hidden></p>
       </section>
       <div class="dm-marker-groups">
         <section class="dm-marker-group" aria-labelledby="dm-map-markers-title">
-          <h3 id="dm-map-markers-title" class="dm-marker-group__title">Map Markers</h3>
+          <h3 id="dm-map-markers-title" class="dm-marker-group__title" data-i18n="Map Markers">Map Markers</h3>
           <div id="dm-location-list" class="dm-marker-list"></div>
         </section>
         <section class="dm-marker-group" aria-labelledby="dm-portrait-markers-title">
-          <h3 id="dm-portrait-markers-title" class="dm-marker-group__title">Portrait Markers</h3>
+          <h3 id="dm-portrait-markers-title" class="dm-marker-group__title" data-i18n="Portrait Markers">Portrait Markers</h3>
           <div id="dm-portrait-list" class="dm-marker-list"></div>
         </section>
       </div>
@@ -312,8 +345,8 @@
 
     <section id="location-panel" class="location-panel" aria-live="polite" aria-labelledby="location-title" hidden>
       <div class="location-panel__header">
-        <p id="location-eyebrow" class="location-panel__eyebrow">Selected Location</p>
-        <h2 id="location-title">Eastern Gates of Barovia</h2>
+        <p id="location-eyebrow" class="location-panel__eyebrow" data-i18n="Selected Location">Selected Location</p>
+        <h2 id="location-title"></h2>
       </div>
       <div id="location-panel-body" class="location-panel__body"></div>
     </section>

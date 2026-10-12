@@ -3,7 +3,11 @@
     "campaigns": {
       "$campaignId": {
         ".read": "auth != null && root.child('userCampaigns').child(auth.uid).child($campaignId).exists()",
-        ".write": "auth != null && (root.child('userCampaigns').child(auth.uid).child($campaignId).child('role').val() === 'dm' || (!data.exists() && newData.child('ownerUid').val() === auth.uid && root.child('users').child(auth.uid).child('role').val() === 'admin'))",
+        ".write": "auth != null && ((data.exists() && root.child('userCampaigns').child(auth.uid).child($campaignId).child('role').val() === 'dm') || (!data.exists() && $campaignId !== 'curse-of-strahd' && newData.child('ownerUid').val() === auth.uid && newData.child('schemaVersion').val() === 2 && newData.parent().parent().child('userCampaigns').child(auth.uid).child($campaignId).child('role').val() === 'dm'))",
+        ".validate": "data.exists() || newData.hasChildren(['name', 'ownerUid', 'createdAt'])",
+        "schemaVersion": {
+          ".validate": "newData.val() === 2 && (!data.exists() || newData.val() === data.val())"
+        },
         "name": {
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
         },
@@ -34,7 +38,8 @@
           }
         },
         "maps": {
-          "barovia": {
+          "$collectionId": {
+            ".validate": "$collectionId === 'barovia' || $collectionId === 'shared'",
             "customMarkers": {
               "$markerId": {
                 "imageFileName": {
@@ -100,7 +105,11 @@
         ".read": "auth != null && auth.uid === $uid",
         "$campaignId": {
           ".read": "auth != null && (auth.uid === $uid || root.child('userCampaigns').child(auth.uid).child($campaignId).child('role').val() === 'dm')",
-          ".write": "auth != null && ((root.child('userCampaigns').child(auth.uid).child($campaignId).child('role').val() === 'dm' && (!newData.exists() || newData.child('role').val() === 'player')) || (auth.uid === $uid && root.child('campaigns').child($campaignId).child('ownerUid').val() === auth.uid && newData.child('role').val() === 'dm'))",
+          ".write": "auth != null && ((root.child('userCampaigns').child(auth.uid).child($campaignId).child('role').val() === 'dm' && (!newData.exists() || ((!data.exists() || data.child('role').val() === 'player') && newData.child('role').val() === 'player' && root.child('users').child($uid).exists()))) || (auth.uid === $uid && newData.parent().parent().parent().child('campaigns').child($campaignId).child('ownerUid').val() === auth.uid && newData.child('role').val() === 'dm'))",
+          ".validate": "newData.hasChildren(['name', 'role', 'joinedAt']) && (newData.parent().parent().parent().child('campaigns').child($campaignId).child('schemaVersion').val() !== 2 || newData.child('schemaVersion').val() === 2)",
+          "schemaVersion": {
+            ".validate": "newData.val() === 2 && newData.parent().parent().parent().parent().child('campaigns').child($campaignId).child('schemaVersion').val() === 2"
+          },
           "name": {
             ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 60"
           },
@@ -119,7 +128,7 @@
     "usernameDirectory": {
       ".read": "auth != null",
       "$username": {
-        ".write": "auth != null && newData.val() === auth.uid && root.child('users').child(auth.uid).child('username').val() === $username",
+        ".write": "auth != null && (!data.exists() || data.val() === auth.uid) && newData.val() === auth.uid && root.child('users').child(auth.uid).child('username').val() === $username",
         ".validate": "newData.isString()"
       }
     },
@@ -128,9 +137,10 @@
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
         "username": {
-          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9._-]{3,24}$/)"
+          ".validate": "newData.isString() && newData.val().matches(/^[a-z0-9._-]{3,24}$/) && (!data.exists() || newData.val() === data.val())"
         },
         "displayName": {
+          ".read": "auth != null",
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24"
         },
         "showInPlayerList": {

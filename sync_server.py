@@ -158,7 +158,7 @@ class WebSocketClient:
 
 
 class MapRequestHandler(SimpleHTTPRequestHandler):
-    server_version = "BaroviaSync/1.0"
+    server_version = "DNDMap/1.0"
 
     def do_GET(self):
         if self.headers.get("Upgrade", "").lower() == "websocket":
@@ -242,7 +242,7 @@ class MapServer(ThreadingHTTPServer):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Serve the CoS map and sync DM marker changes to players.")
+    parser = argparse.ArgumentParser(description="Serve the DND map website and local image catalog.")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to.")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind to.")
     args = parser.parse_args()
@@ -250,7 +250,7 @@ def main():
     hub = SyncHub()
     with MapServer((args.host, args.port), MapRequestHandler, hub) as server:
         host, port = server.server_address
-        print(f"Serving Barovia map at http://{host}:{port}")
+        print(f"Serving DND map website at http://{host}:{port}")
         print(f"Player view: http://{host}:{port}/index.html")
         print(f"DM view: http://{host}:{port}/dm.html")
         try:

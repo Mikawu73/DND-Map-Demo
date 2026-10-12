@@ -3,31 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Barovia Map Player View</title>
-  <link rel="stylesheet" href="assets/styles/main.css?v=20260927-5">
+  <title data-i18n="DND Map · Player">DND Map · Player</title>
+  <link rel="stylesheet" href="assets/styles/main.css?v=20261011-1">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
   <script src="assets/scripts/firebase-config.js?v=20260927-1"></script>
-  <script src="assets/scripts/main.js?v=20260927-5" defer></script>
+  <script src="assets/scripts/i18n.js?v=20261011-1" defer></script>
+  <script src="assets/scripts/main.js?v=20261011-1" defer></script>
 </head>
 <body data-view="player">
   <main class="page">
+    <div class="account-bar">
+      <button type="button" id="language-toggle" class="auth-button language-toggle" aria-label="Switch to Chinese">中文</button>
+      <button type="button" id="user-center-open" class="auth-button account-button" aria-haspopup="dialog" aria-controls="user-center" hidden>
+        <span id="user-center-name" class="account-button__name"></span><span data-i18n="User Center">User Center</span>
+      </button>
+    </div>
+    <dialog id="user-center" class="user-center" aria-labelledby="user-center-title">
+      <div class="user-center__header">
+        <h2 id="user-center-title" data-i18n="User Center">User Center</h2>
+        <button type="button" id="user-center-close" class="user-center__close" aria-label="Close user center" data-i18n-aria-label="Close user center">×</button>
+      </div>
+      <p class="user-center__intro" data-i18n="Let your party know what to call you.">Let your party know what to call you.</p>
+      <form id="display-name-form" class="user-center__form">
+        <label class="auth-form__field">
+          <span data-i18n="Display Name">Display Name</span>
+          <input id="display-name-input" type="text" minlength="1" maxlength="24" required autocomplete="nickname" aria-describedby="display-name-help">
+        </label>
+        <p id="display-name-help" class="user-center__hint" data-i18n="1–24 characters. Your profile and player lists use this name; your sign-in username stays the same.">1–24 characters. Your profile and player lists use this name; your sign-in username stays the same.</p>
+        <label class="auth-form__field">
+          <span data-i18n="Sign-in Username">Sign-in Username</span>
+          <input id="profile-username" type="text" readonly aria-describedby="profile-username-help">
+        </label>
+        <p id="profile-username-help" class="user-center__hint" data-i18n="Used to sign in and identify your account. It cannot be changed here.">Used to sign in and identify your account. It cannot be changed here.</p>
+        <label class="display-name-form__check">
+          <input id="display-name-visible" type="checkbox" checked>
+          <span data-i18n="Show me in campaign player lists when I join as a player">Show me in campaign player lists when I join as a player</span>
+        </label>
+        <p id="display-name-status" class="display-name-status" role="status" aria-live="polite" hidden></p>
+        <button type="submit" id="display-name-save" class="auth-button auth-button--primary" data-i18n="Save Changes">Save Changes</button>
+      </form>
+    </dialog>
     <header class="hero">
-      <p class="eyebrow">Curse of Strahd</p>
-      <h1>Barovia</h1>
-      <p class="intro" id="view-intro">
-        Player view: only the locations revealed by the DM are visible.
+      <p class="eyebrow" data-i18n="Your world · Your adventure">Your world · Your adventure</p>
+      <h1 data-i18n="DND Map">DND Map</h1>
+      <p class="intro" id="view-intro" data-i18n="Choose your campaign, explore its maps, and discover the places and characters revealed by your DM.">
+        Choose your campaign, explore its maps, and discover the places and characters revealed by your DM.
       </p>
     </header>
 
     <section id="auth-panel" class="auth-shell" aria-labelledby="auth-title">
       <div class="auth-shell__card">
         <div class="auth-shell__header">
-          <p class="eyebrow">Adventurer Access</p>
-          <h2 id="auth-title">Sign in to enter Barovia</h2>
-          <p id="auth-copy" class="auth-shell__copy">
-            Players need an account before they can open the shared map.
+          <h2 id="auth-title" data-i18n="Player View">Player View</h2>
+          <p id="auth-copy" class="auth-shell__copy" data-i18n="One account can host your own campaigns and join others as a player.">
+            One account can host your own campaigns and join others as a player.
           </p>
         </div>
 
@@ -35,79 +66,58 @@
 
         <form id="auth-form" class="auth-form">
           <label class="auth-form__field">
-            <span>Username</span>
+            <span data-i18n="Username">Username</span>
             <input id="auth-username" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" required>
           </label>
 
           <label class="auth-form__field">
-            <span>Password</span>
+            <span data-i18n="Password">Password</span>
             <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="6" required>
           </label>
 
           <div class="auth-form__actions">
-            <button type="submit" id="auth-signin" class="auth-button auth-button--primary">Sign In</button>
-            <button type="button" id="auth-signup" class="auth-button">Create Account</button>
+            <button type="submit" id="auth-signin" class="auth-button auth-button--primary" data-i18n="Sign In">Sign In</button>
+            <button type="button" id="auth-signup" class="auth-button" data-i18n="Create Account">Create Account</button>
           </div>
         </form>
 
         <div id="session-panel" class="session-panel" hidden>
           <p id="session-summary" class="session-panel__summary"></p>
           <div class="session-panel__actions">
-            <a id="dm-link" class="auth-button" href="dm.html" hidden>Open DM View</a>
-            <button type="button" id="auth-signout" class="auth-button">Sign Out</button>
+            <a id="dm-link" class="auth-button" href="dm.html" hidden data-i18n="DM Workspace">DM Workspace</a>
+            <button type="button" id="auth-signout" class="auth-button" data-i18n="Sign Out">Sign Out</button>
           </div>
         </div>
 
         <section id="campaign-panel" class="campaign-panel" hidden>
           <div class="campaign-panel__header">
-            <h3>Your Campaigns</h3>
-            <p>Select a campaign to open its map.</p>
+            <h3 data-i18n="Your Campaigns">Your Campaigns</h3>
+            <p data-i18n="Choose a campaign to view the places and characters your DM has revealed.">Choose a campaign to view the places and characters your DM has revealed.</p>
           </div>
           <div id="campaign-list" class="campaign-list"></div>
-          <section id="campaign-admin" class="campaign-admin" hidden>
-            <form id="campaign-create-form" class="campaign-admin__form">
-              <label class="auth-form__field">
-                <span>New Campaign Name</span>
-                <input id="campaign-name" type="text" maxlength="60" placeholder="New adventure" required>
-              </label>
-              <button class="auth-button auth-button--primary" type="submit">Create Campaign</button>
-            </form>
-            <form id="campaign-invite-form" class="campaign-admin__form" hidden>
-              <label class="auth-form__field">
-                <span>Select Existing Player</span>
-                <select id="campaign-invite-player" required>
-                  <option value="">Select a player</option>
-                </select>
-              </label>
-              <button class="auth-button" type="submit">Add To Selected Campaign</button>
-            </form>
-            <section id="campaign-members" class="campaign-members" hidden>
-              <h4>Current Players</h4>
-              <div id="campaign-member-list" class="campaign-member-list"></div>
-            </section>
-          </section>
         </section>
       </div>
     </section>
 
     <section id="app-shell" class="map-shell" aria-labelledby="map-title" hidden>
       <section id="root-map-setup" class="root-map-setup" hidden>
-        <h2>Campaign Map Not Ready</h2>
-        <p>The DM has not uploaded a starting map for this campaign yet.</p>
+        <h2 data-i18n="Map Not Ready">Map Not Ready</h2>
+        <p data-i18n="Your DM has not set a starting map for this campaign yet. Please check back later.">Your DM has not set a starting map for this campaign yet. Please check back later.</p>
       </section>
       <div class="map-frame">
         <div class="map-frame__topbar">
-          <h2 id="map-title">Map of Barovia</h2>
+          <h2 id="map-title">Campaign Map</h2>
           <div class="map-frame__actions">
-            <button type="button" id="map-return" class="map-return" hidden>Return to Barovia</button>
-            <button type="button" id="marker-toggle" class="marker-toggle" aria-pressed="true">Hide Markers</button>
-            <button type="button" id="campaign-switch" class="map-return">Campaigns</button>
-            <button type="button" id="app-signout" class="map-return" hidden>Sign Out</button>
+            <button type="button" id="map-return" class="map-return" hidden data-i18n="Return to Parent Map">Return to Parent Map</button>
+            <button type="button" id="marker-toggle" class="marker-toggle" aria-pressed="true" data-i18n="Hide Markers">Hide Markers</button>
+            <a id="map-view-switch" class="map-return" href="dm.html" hidden data-i18n="DM Workspace">DM Workspace</a>
+            <button type="button" id="campaign-switch" class="map-return" data-i18n="Campaigns">Campaigns</button>
+            <button type="button" id="app-signout" class="map-return" hidden data-i18n="Sign Out">Sign Out</button>
           </div>
         </div>
 
         <section class="map-legend" aria-labelledby="map-legend-title">
-          <p class="map-legend__title" id="map-legend-title">Legend</p>
+          <p class="map-legend__title" id="map-legend-title" data-i18n="Legend">Legend</p>
           <div id="map-legend-items" class="map-legend__items"></div>
         </section>
 
@@ -126,7 +136,7 @@
             <button type="button" class="map-marker map-marker--location" style="left: 26.88%; top: 29.58%;" data-map-id="village-of-barovia" data-location-id="church" data-location-name="教堂" data-location-src="content/locations/church.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 教堂"></button>
           </div>
 
-          <aside id="portrait-rail" class="portrait-rail" aria-label="Character portraits" hidden>
+          <aside id="portrait-rail" class="portrait-rail" aria-label="Character portraits" hidden data-i18n-aria-label="Character portraits">
             <button type="button" class="portrait-marker portrait-marker--strahd" data-map-id="barovia" data-location-id="strahd-portrait" data-location-name="Strahd•Von•Zarovich" data-location-type="portrait" data-image-src="assets/images/Count%20Strahd%20von%20Zarovich.jpg" data-image-alt="Portrait of Strahd•Von•Zarovich" data-location-src="content/characters/strahd.html" aria-controls="location-panel" aria-label="Show portrait of Strahd•Von•Zarovich"><img src="assets/images/Count%20Strahd%20von%20Zarovich.jpg" alt="Strahd•Von•Zarovich"><span>Strahd•Von•Zarovich</span></button>
             <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="donavich-portrait" data-location-name="Donavich" data-location-type="portrait" data-image-src="assets/images/Donavich.jpg" data-image-alt="Portrait of Donavich" data-location-src="content/characters/donavich.html" aria-controls="location-panel" aria-label="Show portrait of Donavich"><img src="assets/images/Donavich.jpg" alt="Donavich"><span>Donavich</span></button>
             <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="doru-portrait" data-location-name="Doru" data-location-type="portrait" data-image-src="assets/images/Doru.jpg" data-image-alt="Portrait of Doru" data-location-src="content/characters/doru.html" aria-controls="location-panel" aria-label="Show portrait of Doru"><img src="assets/images/Doru.jpg" alt="Doru"><span>Doru</span></button>
@@ -141,37 +151,25 @@
 
     <section id="presence-panel" class="presence-panel" aria-labelledby="presence-title" hidden>
       <div class="presence-panel__header">
-        <p class="location-panel__eyebrow">Party Roster</p>
-        <h2 id="presence-title">Registered Players</h2>
+        <p class="location-panel__eyebrow" data-i18n="Party Roster">Party Roster</p>
+        <h2 id="presence-title" data-i18n="Registered Players">Registered Players</h2>
       </div>
-      <form id="display-name-form" class="display-name-form">
-        <label class="display-name-form__field">
-          <span>Your Display Name</span>
-          <input id="display-name-input" type="text" maxlength="24" placeholder="Enter the name shown to other players">
-        </label>
-        <label class="display-name-form__check">
-          <input id="display-name-visible" type="checkbox" checked>
-          <span>Show me in the player list</span>
-        </label>
-        <button type="submit" id="display-name-save" class="auth-button">Save Name</button>
-      </form>
-      <p id="display-name-status" class="display-name-status" hidden></p>
       <div id="presence-list" class="presence-list"></div>
     </section>
 
     <section id="dm-controls" class="dm-panel" aria-labelledby="dm-controls-title" hidden>
       <div class="dm-panel__header">
-        <p class="location-panel__eyebrow">Dungeon Master</p>
-        <h2 id="dm-controls-title">Marker Visibility</h2>
+        <p class="location-panel__eyebrow" data-i18n="Dungeon Master">Dungeon Master</p>
+        <h2 id="dm-controls-title" data-i18n="Marker Visibility">Marker Visibility</h2>
       </div>
-      <p class="dm-panel__intro">Choose which locations and portraits are revealed to players. These settings are stored in this browser.</p>
+      <p class="dm-panel__intro" data-i18n="Choose which locations and portraits are revealed to players. These settings are synchronized with campaign members.">Choose which locations and portraits are revealed to players. These settings are synchronized with campaign members.</p>
       <div class="dm-marker-groups">
         <section class="dm-marker-group" aria-labelledby="dm-map-markers-title">
-          <h3 id="dm-map-markers-title" class="dm-marker-group__title">Map Markers</h3>
+          <h3 id="dm-map-markers-title" class="dm-marker-group__title" data-i18n="Map Markers">Map Markers</h3>
           <div id="dm-location-list" class="dm-marker-list"></div>
         </section>
         <section class="dm-marker-group" aria-labelledby="dm-portrait-markers-title">
-          <h3 id="dm-portrait-markers-title" class="dm-marker-group__title">Portrait Markers</h3>
+          <h3 id="dm-portrait-markers-title" class="dm-marker-group__title" data-i18n="Portrait Markers">Portrait Markers</h3>
           <div id="dm-portrait-list" class="dm-marker-list"></div>
         </section>
       </div>
@@ -179,8 +177,8 @@
 
     <section id="location-panel" class="location-panel" aria-live="polite" aria-labelledby="location-title" hidden>
       <div class="location-panel__header">
-        <p id="location-eyebrow" class="location-panel__eyebrow">Selected Location</p>
-        <h2 id="location-title">Eastern Gates of Barovia</h2>
+        <p id="location-eyebrow" class="location-panel__eyebrow" data-i18n="Selected Location">Selected Location</p>
+        <h2 id="location-title"></h2>
       </div>
       <div id="location-panel-body" class="location-panel__body"></div>
     </section>

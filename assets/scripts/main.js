@@ -1,3 +1,5 @@
+const t = (key, values) => window.I18n.t(key, values);
+const setUiText = (element, key, values) => window.I18n.setText(element, key, values);
 let markerButtons = [];
 const locationPanel = document.getElementById("location-panel");
 const locationTitle = document.getElementById("location-title");
@@ -42,6 +44,11 @@ const displayNameInput = document.getElementById("display-name-input");
 const displayNameVisibleInput = document.getElementById("display-name-visible");
 const displayNameSaveButton = document.getElementById("display-name-save");
 const displayNameStatus = document.getElementById("display-name-status");
+const userCenter = document.getElementById("user-center");
+const userCenterOpen = document.getElementById("user-center-open");
+const userCenterClose = document.getElementById("user-center-close");
+const userCenterName = document.getElementById("user-center-name");
+const profileUsername = document.getElementById("profile-username");
 const viewIntro = document.getElementById("view-intro");
 const mapTitle = document.getElementById("map-title");
 const appShell = document.getElementById("app-shell");
@@ -83,18 +90,19 @@ const ROOT_MAP = {
   title: "Map of Barovia"
 };
 const MARKER_ICON_DEFINITIONS = [
-  { id: "gate", label: "大门", fileName: "大门.png" },
-  { id: "village", label: "村庄", fileName: "村庄.png" },
-  { id: "town", label: "城镇", fileName: "城镇.png" },
-  { id: "manor", label: "庄园", fileName: "庄园.png" },
-  { id: "castle", label: "城堡", fileName: "城堡.png" },
-  { id: "temple", label: "神殿", fileName: "神殿.png" },
-  { id: "tent", label: "帐篷", fileName: "帐篷.png" },
-  { id: "hill", label: "山丘", fileName: "山丘.png" },
-  { id: "letter", label: "信件", fileName: "信件.png" },
-  { id: "point-of-interest", label: "兴趣点", fileName: "兴趣点.png" }
+  { id: "gate", get label() { return t("Gate"); }, fileName: "大门.png" },
+  { id: "village", get label() { return t("Village"); }, fileName: "村庄.png" },
+  { id: "town", get label() { return t("Town"); }, fileName: "城镇.png" },
+  { id: "manor", get label() { return t("Manor"); }, fileName: "庄园.png" },
+  { id: "castle", get label() { return t("Castle"); }, fileName: "城堡.png" },
+  { id: "temple", get label() { return t("Temple"); }, fileName: "神殿.png" },
+  { id: "tent", get label() { return t("Tent"); }, fileName: "帐篷.png" },
+  { id: "hill", get label() { return t("Hill"); }, fileName: "山丘.png" },
+  { id: "letter", get label() { return t("Letter"); }, fileName: "信件.png" },
+  { id: "point-of-interest", get label() { return t("Point of Interest"); }, fileName: "兴趣点.png" }
 ].map((icon) => ({
   ...icon,
+  get label() { return icon.label; },
   src: `assets/icons/${encodeURIComponent(icon.fileName)}`
 }));
 const MARKER_ICON_BY_ID = new Map(MARKER_ICON_DEFINITIONS.map((icon) => [icon.id, icon]));
@@ -102,7 +110,6 @@ const DEFAULT_MARKER_TYPE_ID = "point-of-interest";
 const AUTH_CONFIG = window.APP_AUTH_CONFIG || {};
 const CLOUDINARY_CONFIG = window.CLOUDINARY_CONFIG || {};
 const USERNAME_DOMAIN = AUTH_CONFIG.usernameDomain || "barovia.local";
-const ADMIN_ROLE = AUTH_CONFIG.adminRole || "admin";
 const CLOUDINARY_CLOUD_NAME = String(CLOUDINARY_CONFIG.cloudName || "").trim();
 const CLOUDINARY_UPLOAD_PRESET = String(CLOUDINARY_CONFIG.uploadPreset || "").trim();
 const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -158,6 +165,9 @@ let campaignRootMap = null;
 let placementModeActive = false;
 let markerSaveBusy = false;
 let campaignDeleteBusy = false;
+let campaignCreateBusy = false;
+let profileSaveBusy = false;
+let userProfileRef = null;
 const customMarkers = {};
 const markerIconAssignments = {};
 
@@ -173,8 +183,9 @@ function createCampaignId(name) {
   const slug = normalizeCampaignId(name)
     .replace(/[^a-z0-9-]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 24) || "campaign";
-  return `${slug}-${Date.now().toString(36)}`.slice(0, 40);
+    .slice(0, 18) || "campaign";
+  const random = Array.from(crypto.getRandomValues(new Uint8Array(5)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${slug}-${Date.now().toString(36)}-${random}`;
 }
 
 function getCurrentCampaignId() {
@@ -184,6 +195,28 @@ function getCurrentCampaignId() {
 function getCampaignPath(suffix = "") {
   const campaignId = getCurrentCampaignId();
   return campaignId ? `campaigns/${campaignId}${suffix ? `/${suffix}` : ""}` : "";
+}
+
+// Existing campaigns retain their original storage path; new campaigns are generic.
+function getMapDataPath(suffix) {
+  const collection = campaignMemberships[getCurrentCampaignId()]?.schemaVersion === 2 ? "shared" : "barovia";
+  return getCampaignPath(`maps/${collection}/${suffix}`);
+}
+
+function getCampaignViewUrl(mode, campaignId = getCurrentCampaignId()) {
+  return `${mode === "dm" ? "dm.html" : "index.html"}${campaignId ? `?campaign=${encodeURIComponent(campaignId)}` : ""}`;
+}
+
+function syncCampaignUrl(campaignId = "") {
+  const query = new URLSearchParams(window.location.search);
+  if (campaignId) {
+    query.set("campaign", campaignId);
+  } else {
+    query.delete("campaign");
+  }
+  const search = query.toString();
+  const url = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+  window.history.replaceState(window.history.state, "", url);
 }
 
 function getVisibilityStorageKey(baseKey) {
@@ -320,12 +353,12 @@ function isPortraitMarker(marker) {
   return marker.classList.contains("portrait-marker");
 }
 
-function isAdminProfile(profile) {
-  return profile?.role === ADMIN_ROLE;
-}
-
 function isCampaignDm(campaignId = getCurrentCampaignId()) {
   return campaignMemberships[campaignId]?.role === "dm";
+}
+
+function canManageCampaign(campaignId = getCurrentCampaignId()) {
+  return viewMode === "dm" && isCampaignDm(campaignId);
 }
 
 function canAccessCurrentView() {
@@ -336,20 +369,20 @@ function canAccessCurrentView() {
   return viewMode === "dm" ? isCampaignDm() : !!campaignMemberships[getCurrentCampaignId()];
 }
 
-function setAuthMessage(message, type = "info") {
+function setAuthMessage(message, type = "info", values = {}) {
   if (!authMessage) {
     return;
   }
 
   if (!message) {
     authMessage.hidden = true;
-    authMessage.textContent = "";
+    setUiText(authMessage, "");
     authMessage.dataset.state = "";
     return;
   }
 
   authMessage.hidden = false;
-  authMessage.textContent = message;
+  setUiText(authMessage, message, values);
   authMessage.dataset.state = type;
 }
 
@@ -384,8 +417,42 @@ function usernameToEmail(username) {
 }
 
 function getDisplayName() {
-  return currentUserProfile?.displayName || currentUserProfile?.username || currentUser?.displayName || currentUser?.email || "Unknown user";
+  return currentUserProfile?.displayName || currentUserProfile?.username || currentUser?.displayName || currentUser?.email || t("Unknown user");
 }
+
+async function loadDisplayName(uid, fallback) {
+  try {
+    const snapshot = await firebaseDatabase.ref(`${USERS_PATH}/${uid}/displayName`).once("value");
+    const name = snapshot.val();
+    return typeof name === "string" && name.trim() ? name : fallback;
+  } catch (error) {
+    // Older database rules keep other users' profiles private.
+    return fallback;
+  }
+}
+
+function startUserProfileSync() {
+  userProfileRef?.off();
+  const uid = currentUser?.uid;
+  if (!firebaseDatabase || !uid) return;
+  userProfileRef = firebaseDatabase.ref(`${USERS_PATH}/${uid}`);
+  userProfileRef.on("value", (snapshot) => {
+    if (currentUser?.uid !== uid || !snapshot.val()) return;
+    currentUserProfile = snapshot.val();
+    updateSessionPanel();
+  }, (error) => console.warn("Unable to sync profile.", error));
+}
+
+userCenterOpen?.addEventListener("click", () => {
+  if (!currentUser || !currentUserProfile || userCenter.open) return;
+  displayNameInput.value = getDisplayName();
+  displayNameVisibleInput.checked = currentUserProfile.showInPlayerList !== false;
+  profileUsername.value = currentUserProfile.username || "";
+  setDisplayNameStatus("", "info");
+  userCenter.showModal();
+});
+
+userCenterClose?.addEventListener("click", () => userCenter.close());
 
 function escapeHtml(value) {
   return String(value || "")
@@ -396,20 +463,20 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function setDmMarkerStatus(message, type = "info") {
+function setDmMarkerStatus(message, type = "info", values = {}) {
   if (!dmMarkerStatus) {
     return;
   }
 
   if (!message) {
     dmMarkerStatus.hidden = true;
-    dmMarkerStatus.textContent = "";
+    setUiText(dmMarkerStatus, "");
     dmMarkerStatus.dataset.state = "";
     return;
   }
 
   dmMarkerStatus.hidden = false;
-  dmMarkerStatus.textContent = message;
+  setUiText(dmMarkerStatus, message, values);
   dmMarkerStatus.dataset.state = type;
 }
 
@@ -420,13 +487,13 @@ function setDisplayNameStatus(message, type = "info") {
 
   if (!message) {
     displayNameStatus.hidden = true;
-    displayNameStatus.textContent = "";
+    setUiText(displayNameStatus, "");
     displayNameStatus.dataset.state = "";
     return;
   }
 
   displayNameStatus.hidden = false;
-  displayNameStatus.textContent = message;
+  setUiText(displayNameStatus, message);
   displayNameStatus.dataset.state = type;
 }
 
@@ -486,19 +553,19 @@ function getImageUploadValidationError(file) {
 
   const fileName = normalizeImageFileName(file.name);
   if (!isSafeImageFileName(fileName)) {
-    return "Choose a JPG, JPEG, PNG, WebP, GIF, or AVIF image with a file name under 120 characters.";
+    return t("Choose a JPG, JPEG, PNG, WebP, GIF, or AVIF image with a file name under 120 characters.");
   }
 
   if (!file.size) {
-    return "The selected image is empty.";
+    return t("The selected image is empty.");
   }
 
   if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
-    return "The selected image is larger than 10 MB.";
+    return t("The selected image is larger than 10 MB.");
   }
 
   if (file.type && !file.type.startsWith("image/")) {
-    return "The selected file is not an image.";
+    return t("The selected file is not an image.");
   }
 
   return "";
@@ -506,7 +573,7 @@ function getImageUploadValidationError(file) {
 
 async function uploadImageToCloudinary(file) {
   if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
-    throw new Error("Cloudinary upload is not configured.");
+    throw new Error(t("Cloudinary upload is not configured."));
   }
 
   const validationError = getImageUploadValidationError(file);
@@ -534,7 +601,7 @@ async function uploadImageToCloudinary(file) {
   }
 
   if (!response.ok) {
-    throw new Error(payload?.error?.message || `Cloudinary upload failed (${response.status}).`);
+    throw new Error(t("Cloudinary upload failed ({status}).", { status: response.status }));
   }
 
   const secureUrl = String(payload?.secure_url || "");
@@ -542,7 +609,7 @@ async function uploadImageToCloudinary(file) {
   try {
     uploadedUrl = new URL(secureUrl);
   } catch {
-    throw new Error("Cloudinary did not return a valid image URL.");
+    throw new Error(t("Cloudinary did not return a valid image URL."));
   }
 
   const expectedPathPrefix = `/${CLOUDINARY_CLOUD_NAME}/image/upload/`;
@@ -551,7 +618,7 @@ async function uploadImageToCloudinary(file) {
     uploadedUrl.hostname !== "res.cloudinary.com" ||
     !uploadedUrl.pathname.startsWith(expectedPathPrefix)
   ) {
-    throw new Error("Cloudinary returned an unexpected image URL.");
+    throw new Error(t("Cloudinary returned an unexpected image URL."));
   }
 
   return {
@@ -581,9 +648,9 @@ async function loadImageFileOptions() {
 
   try {
     const imageNames = await fetchImageFileNames();
-    populateImageSelect(dmMarkerImageFileInput, imageNames, "No image");
-    populateImageSelect(dmMarkerMapImageFileInput, imageNames, "Choose map image");
-    populateImageSelect(rootMapImageFileInput, imageNames, "Choose map image");
+    populateImageSelect(dmMarkerImageFileInput, imageNames, t("No image"));
+    populateImageSelect(dmMarkerMapImageFileInput, imageNames, t("Choose map image"));
+    populateImageSelect(rootMapImageFileInput, imageNames, t("Choose map image"));
   } catch (error) {
     console.warn("Unable to load image file options.", error);
   }
@@ -627,7 +694,7 @@ function populateImageSelect(select, imageNames, emptyLabel) {
 
   const selectedValue = select.value;
   select.innerHTML = [
-    `<option value="">${escapeHtml(emptyLabel)}</option>`,
+    `<option value="" data-i18n="${escapeHtml(emptyLabel)}">${escapeHtml(t(emptyLabel))}</option>`,
     ...imageNames.map((imageName) => `<option value="${escapeHtml(imageName)}">${escapeHtml(imageName)}</option>`)
   ].join("");
 
@@ -651,11 +718,11 @@ function syncMapMarkerFields() {
   }
 
   if (dmMarkerPlacementButton) {
-    dmMarkerPlacementButton.textContent = isNpcMarker
-      ? "Create NPC"
+    setUiText(dmMarkerPlacementButton, isNpcMarker
+      ? t("Create NPC")
       : placementModeActive
-        ? "Cancel Placement"
-        : "Place Marker On Map";
+        ? t("Cancel Placement")
+        : t("Place Marker On Map"));
   }
 }
 
@@ -664,17 +731,17 @@ function setPlacementMode(isActive) {
 
   if (dmMarkerPlacementButton) {
     dmMarkerPlacementButton.setAttribute("aria-pressed", String(isActive));
-    dmMarkerPlacementButton.textContent = dmMarkerTypeInput?.value === "npc"
-      ? "Create NPC"
+    setUiText(dmMarkerPlacementButton, dmMarkerTypeInput?.value === "npc"
+      ? t("Create NPC")
       : isActive
-        ? "Cancel Placement"
-        : "Place Marker On Map";
+        ? t("Cancel Placement")
+        : t("Place Marker On Map"));
   }
 
   mapStage?.classList.toggle("map-stage--placement-mode", isActive);
 
   if (isActive) {
-    setDmMarkerStatus("Click an empty spot on the current map to place the marker.", "info");
+    setDmMarkerStatus(t("Click an empty spot on the current map to place the marker."), "info");
   } else if (dmMarkerStatus?.dataset.state === "info") {
     setDmMarkerStatus("", "info");
   }
@@ -690,11 +757,11 @@ function renderInlineMarkerContent(marker) {
   }
 
   const description = marker.dataset.inlineDescription;
-  const title = marker.dataset.locationName || "Location";
+  const title = marker.dataset.locationName || t("Location");
   const imagePath = marker.dataset.imageSrc || "";
 
   if (!description && !imagePath) {
-    locationPanelBody.innerHTML = '<p class="location-panel__status">No notes have been added for this marker yet.</p>';
+    locationPanelBody.innerHTML = `<p class="location-panel__status" data-i18n="No notes have been added for this marker yet.">${t("No notes have been added for this marker yet.")}</p>`;
     return;
   }
 
@@ -728,7 +795,7 @@ function updateMarkerIconPreview(previewImage, defaultPreview, iconId) {
 
   if (icon) {
     previewImage.src = icon.src;
-    previewImage.alt = `${icon.label} marker icon preview`;
+    window.I18n.setAttribute(previewImage, "alt", "{name} marker icon preview", { name: icon.label });
   } else {
     previewImage.removeAttribute("src");
     previewImage.alt = "";
@@ -753,9 +820,9 @@ function renderMarkerIconEditor(marker) {
   const heading = document.createElement("div");
   heading.className = "marker-icon-editor__heading";
   heading.innerHTML = `
-    <p class="location-panel__eyebrow">DM only</p>
-    <h3 id="marker-icon-editor-title">Marker Icon</h3>
-    <p>Choose the symbol displayed on the map. This setting is shared with players in this campaign.</p>
+    <p class="location-panel__eyebrow" data-i18n="DM only">${t("DM only")}</p>
+    <h3 id="marker-icon-editor-title" data-i18n="Marker Icon">${t("Marker Icon")}</h3>
+    <p data-i18n="Choose the symbol displayed on the map. This setting is shared with players in this campaign.">${t("Choose the symbol displayed on the map. This setting is shared with players in this campaign.")}</p>
   `;
 
   const form = document.createElement("form");
@@ -767,19 +834,19 @@ function renderMarkerIconEditor(marker) {
   previewImage.className = "marker-icon-editor__preview-image";
   const defaultPreview = document.createElement("span");
   defaultPreview.className = "marker-icon-editor__default-preview";
-  defaultPreview.setAttribute("aria-label", "Default marker preview");
+  window.I18n.setAttribute(defaultPreview, "aria-label", "Default marker preview");
   preview.append(previewImage, defaultPreview);
 
   const field = document.createElement("label");
   field.className = "marker-icon-editor__field";
   const fieldLabel = document.createElement("span");
-  fieldLabel.textContent = "Map icon";
+  setUiText(fieldLabel, t("Map icon"));
   const select = document.createElement("select");
-  select.setAttribute("aria-label", "Map icon");
+  window.I18n.setAttribute(select, "aria-label", "Map icon");
   select.innerHTML = [
-    '<option value="">Default marker</option>',
+    `<option value="" data-i18n="Default marker">${t("Default marker")}</option>`,
     ...MARKER_ICON_DEFINITIONS.map(
-      (icon) => `<option value="${escapeHtml(icon.id)}">${escapeHtml(icon.label)}</option>`
+      (icon) => `<option value="${escapeHtml(icon.id)}" data-i18n="${escapeHtml(icon.label)}">${escapeHtml(icon.label)}</option>`
     )
   ].join("");
   select.value = getAssignedMarkerIconId(marker);
@@ -788,7 +855,7 @@ function renderMarkerIconEditor(marker) {
   const saveButton = document.createElement("button");
   saveButton.type = "submit";
   saveButton.className = "auth-button auth-button--primary";
-  saveButton.textContent = "Save Icon";
+  setUiText(saveButton, t("Save Icon"));
 
   const status = document.createElement("p");
   status.className = "marker-icon-editor__status";
@@ -810,14 +877,14 @@ function renderMarkerIconEditor(marker) {
     if (iconId && !MARKER_ICON_BY_ID.has(iconId)) {
       status.hidden = false;
       status.dataset.state = "error";
-      status.textContent = "Choose a valid marker icon.";
+      setUiText(status, t("Choose a valid marker icon."));
       return;
     }
 
     saveButton.disabled = true;
     status.hidden = false;
     status.dataset.state = "info";
-    status.textContent = "Saving marker icon...";
+    setUiText(status, t("Saving marker icon..."));
 
     try {
       const iconRef = markerIconsRef.child(getMarkerIconStorageKey(marker));
@@ -827,11 +894,11 @@ function renderMarkerIconEditor(marker) {
         await iconRef.remove();
       }
       status.dataset.state = "success";
-      status.textContent = iconId ? "Marker icon updated." : "Default marker restored.";
+      setUiText(status, iconId ? t("Marker icon updated.") : t("Default marker restored."));
     } catch (error) {
       console.error("Unable to update marker icon.", error);
       status.dataset.state = "error";
-      status.textContent = "Marker icon could not be saved. Check your Firebase rules.";
+      setUiText(status, t("Marker icon could not be saved. Check your Firebase rules."));
     } finally {
       saveButton.disabled = false;
     }
@@ -847,7 +914,7 @@ function renderMapMarkerNavigation(marker) {
     return;
   }
 
-  const targetTitle = marker.dataset.targetMapTitle || marker.dataset.locationName || "Map";
+  const targetTitle = marker.dataset.targetMapTitle || marker.dataset.locationName || t("Map");
   const navigation = document.createElement("section");
   navigation.className = "map-marker-navigation";
 
@@ -855,15 +922,15 @@ function renderMapMarkerNavigation(marker) {
   copy.className = "map-marker-navigation__copy";
   const eyebrow = document.createElement("p");
   eyebrow.className = "location-panel__eyebrow";
-  eyebrow.textContent = "Linked Map";
+  setUiText(eyebrow, t("Linked Map"));
   const description = document.createElement("p");
-  description.textContent = `This marker opens ${targetTitle}. You can enter the map after changing its icon.`;
+  setUiText(description, "This marker opens {name}. You can enter the map after changing its icon.", { name: targetTitle });
   copy.append(eyebrow, description);
 
   const openButton = document.createElement("button");
   openButton.type = "button";
   openButton.className = "auth-button auth-button--primary";
-  openButton.textContent = `Open ${targetTitle}`;
+  setUiText(openButton, "Open {name}", { name: targetTitle });
   openButton.addEventListener("click", async () => {
     openButton.disabled = true;
     try {
@@ -892,21 +959,21 @@ async function showMarkerDetails(marker, options = {}) {
 
   const locationSrc = marker.dataset.locationSrc;
   if (locationEyebrow) {
-    locationEyebrow.textContent = iconOnly
-      ? "DM Marker Settings"
+    setUiText(locationEyebrow, iconOnly
+      ? t("DM Marker Settings")
       : mapSrc
-        ? "DM Map Entrance"
+        ? t("DM Map Entrance")
         : isPortraitMarker(marker)
-          ? "Selected Portrait"
-          : "Selected Location";
+          ? t("Selected Portrait")
+          : t("Selected Location"));
   }
-  locationTitle.textContent = marker.dataset.locationName || (isPortraitMarker(marker) ? "Portrait" : "Location");
+  locationTitle.textContent = marker.dataset.locationName || (isPortraitMarker(marker) ? t("Portrait") : t("Location"));
   locationTitle.classList.toggle("location-panel__title--strahd", marker.dataset.locationId === "strahd-portrait");
   locationPanelBody.innerHTML = iconOnly
-    ? '<p class="location-panel__status">Use the DM controls below to change this marker icon.</p>'
+    ? `<p class="location-panel__status" data-i18n="Use the DM controls below to change this marker icon.">${t("Use the DM controls below to change this marker icon.")}</p>`
     : mapSrc
       ? ""
-      : '<p class="location-panel__status">Loading...</p>';
+      : `<p class="location-panel__status" data-i18n="Loading...">${t("Loading...")}</p>`;
   locationPanel.hidden = false;
   locationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -938,8 +1005,8 @@ async function showMarkerDetails(marker, options = {}) {
     locationPanelBody.innerHTML = html;
   } catch (error) {
     locationPanelBody.innerHTML = isPortraitMarker(marker)
-      ? '<p class="location-panel__status">Failed to load character content.</p>'
-      : '<p class="location-panel__status">Failed to load location content.</p>';
+      ? `<p class="location-panel__status" data-i18n="Failed to load character content.">${t("Failed to load character content.")}</p>`
+      : `<p class="location-panel__status" data-i18n="Failed to load location content.">${t("Failed to load location content.")}</p>`;
     console.error(error);
   }
 
@@ -986,6 +1053,9 @@ function registerExistingMarkers() {
   markerButtons = [];
 
   for (const marker of document.querySelectorAll(".map-marker, .portrait-marker")) {
+    window.I18n.setAttribute(marker, "aria-label",
+      marker.dataset.mapSrc ? "Show the {name} map" : isPortraitMarker(marker) ? "Show portrait of {name}" : "Open details for {name}",
+      { name: marker.dataset.locationName || marker.dataset.locationId });
     registerMarkerElement(marker);
   }
 }
@@ -1040,7 +1110,7 @@ function renderCustomMarkers() {
     marker.style.top = `${Number(markerRecord.y).toFixed(2)}%`;
     marker.dataset.mapId = markerRecord.mapId;
     marker.dataset.locationId = markerRecord.id;
-    marker.dataset.locationName = markerRecord.title || "Custom Marker";
+    marker.dataset.locationName = markerRecord.title || t("Custom Marker");
     marker.dataset.locationType = markerRecord.type || "location";
     marker.dataset.inlineDescription = markerRecord.description || "";
     marker.dataset.imageSrc = markerRecord.imagePath || "";
@@ -1049,11 +1119,12 @@ function renderCustomMarkers() {
     marker.dataset.targetMapTitle = markerRecord.targetMapTitle || "";
     marker.dataset.mapAlt = markerRecord.mapAlt || "";
     marker.setAttribute("aria-controls", "location-panel");
-    marker.setAttribute(
+    window.I18n.setAttribute(marker,
       "aria-label",
       markerRecord.mapSrc
-        ? `Show the ${markerRecord.targetMapTitle || markerRecord.title || "custom"} map`
-        : `Open details for ${markerRecord.title || "custom marker"}`
+        ? "Show the {name} map"
+        : "Open details for {name}",
+      { name: markerRecord.targetMapTitle || markerRecord.title || t("Custom Marker") }
     );
     mapStage?.append(marker);
     registerMarkerElement(marker);
@@ -1072,22 +1143,22 @@ function renderCustomNpcMarker(markerRecord) {
   marker.className = "portrait-marker portrait-marker--custom";
   marker.dataset.mapId = markerRecord.mapId;
   marker.dataset.locationId = markerRecord.id;
-  marker.dataset.locationName = markerRecord.title || "Custom NPC";
+  marker.dataset.locationName = markerRecord.title || t("Custom NPC");
   marker.dataset.locationType = "npc";
   marker.dataset.inlineDescription = markerRecord.description || "";
   marker.dataset.imageSrc = markerRecord.imagePath || "";
   marker.setAttribute("aria-controls", "location-panel");
-  marker.setAttribute("aria-label", `Show NPC ${markerRecord.title || "custom NPC"}`);
+  window.I18n.setAttribute(marker, "aria-label", "Show NPC {name}", { name: markerRecord.title || t("Custom NPC") });
 
   if (markerRecord.imagePath) {
     const image = document.createElement("img");
     image.src = markerRecord.imagePath;
-    image.alt = markerRecord.title || "NPC portrait";
+    image.alt = markerRecord.title || t("NPC portrait");
     marker.append(image);
   }
 
   const label = document.createElement("span");
-  label.textContent = markerRecord.title || "Custom NPC";
+  label.textContent = markerRecord.title || t("Custom NPC");
   marker.append(label);
   portraitRail?.append(marker);
   registerMarkerElement(marker);
@@ -1105,17 +1176,17 @@ function renderPresenceList(entries) {
   presencePanel.hidden = false;
 
   if (visiblePlayers.length === 0) {
-    presenceList.innerHTML = '<p class="location-panel__status">No registered players are currently visible.</p>';
+    presenceList.innerHTML = `<p class="location-panel__status" data-i18n="No registered players are currently visible.">${t("No registered players are currently visible.")}</p>`;
     return;
   }
 
   presenceList.innerHTML = visiblePlayers.map(([, entry]) => `
     <article class="presence-item">
       <div>
-        <p class="presence-item__name">${escapeHtml(entry.displayName || entry.username || "Unknown player")}</p>
-        <p class="presence-item__meta">Registered player</p>
+        <p class="presence-item__name">${escapeHtml(entry.displayName || entry.username || t("Unknown player"))}</p>
+        <p class="presence-item__meta" data-i18n="Registered player">${t("Registered player")}</p>
       </div>
-      <p class="presence-item__meta">${entry.lastUpdated ? "Listed" : "Ready"}</p>
+      <p class="presence-item__meta" data-i18n="${entry.lastUpdated ? "Listed" : "Ready"}">${entry.lastUpdated ? t("Listed") : t("Ready")}</p>
     </article>
   `).join("");
 }
@@ -1158,20 +1229,20 @@ function startPresenceSync() {
   }, () => {
     if (presenceList) {
       presencePanel.hidden = false;
-      presenceList.innerHTML = '<p class="location-panel__status">Player list could not be loaded.</p>';
+      presenceList.innerHTML = `<p class="location-panel__status" data-i18n="Player list could not be loaded.">${t("Player list could not be loaded.")}</p>`;
     }
   });
 }
 
 async function syncCurrentPlayerDirectoryProfile() {
-  if (!currentPlayerDirectoryRef || !currentUser || !currentUserProfile || currentUserProfile.role !== "player") {
+  if (!currentPlayerDirectoryRef || !currentUser || !currentUserProfile || campaignMemberships[activeCampaignId]?.role !== "player") {
     return;
   }
 
   await currentPlayerDirectoryRef.update({
     username: currentUserProfile.username || "",
     displayName: getDisplayName(),
-    role: currentUserProfile.role || "player",
+    role: "player",
     showInPlayerList: currentUserProfile.showInPlayerList !== false,
     lastUpdated: window.firebase.database.ServerValue.TIMESTAMP
   });
@@ -1202,7 +1273,7 @@ function broadcastVisibilityState() {
 
   databaseRef.set(markerVisibility).catch((error) => {
     console.warn("Unable to sync marker visibility to Firebase.", error);
-    setAuthMessage("DM state could not be saved to Firebase. Check your database rules.", "error");
+    setAuthMessage(t("DM state could not be saved to Firebase. Check your database rules."), "error");
   });
 }
 
@@ -1263,8 +1334,13 @@ function applyCampaignRootMap(rootMap) {
   }
 
   if (!campaignRootMap) {
+    currentMap = { id: "root", title: t("Campaign Map"), src: "", alt: "" };
+    mapHistory.splice(0, mapHistory.length);
+    mapImage.removeAttribute("src");
+    locationPanel.hidden = true;
     applyCustomMarkersSnapshot({});
     applyVisibilitySnapshot({});
+    updateMapHeader();
     return;
   }
 
@@ -1281,7 +1357,7 @@ function applyCampaignRootMap(rootMap) {
 
 function initializeFirebaseServices() {
   if (!window.firebase || !window.FIREBASE_CONFIG) {
-    setAuthMessage("Firebase SDK or config is unavailable, so authentication cannot start.", "error");
+    setAuthMessage(t("Firebase SDK or config is unavailable, so authentication cannot start."), "error");
     return false;
   }
 
@@ -1294,7 +1370,7 @@ function initializeFirebaseServices() {
     return true;
   } catch (error) {
     console.warn("Unable to initialize Firebase services.", error);
-    setAuthMessage("Firebase could not be initialized. Check your config and reload the page.", "error");
+    setAuthMessage(t("Firebase could not be initialized. Check your config and reload the page."), "error");
     return false;
   }
 }
@@ -1304,9 +1380,9 @@ function initializeFirebaseSync() {
     return;
   }
 
-  databaseRef = firebaseDatabase.ref(getCampaignPath("maps/barovia/markerVisibility"));
-  customMarkersRef = firebaseDatabase.ref(getCampaignPath("maps/barovia/customMarkers"));
-  markerIconsRef = firebaseDatabase.ref(getCampaignPath("maps/barovia/markerIcons"));
+  databaseRef = firebaseDatabase.ref(getMapDataPath("markerVisibility"));
+  customMarkersRef = firebaseDatabase.ref(getMapDataPath("customMarkers"));
+  markerIconsRef = firebaseDatabase.ref(getMapDataPath("markerIcons"));
   rootMapRef = firebaseDatabase.ref(getCampaignPath("rootMap"));
   firebaseReady = true;
   firebaseSyncStarted = true;
@@ -1315,7 +1391,7 @@ function initializeFirebaseSync() {
     applyCampaignRootMap(snapshot.val());
   }, (error) => {
     console.warn("Unable to read campaign root map.", error);
-    setAuthMessage("Campaign map configuration could not be loaded.", "error");
+    setAuthMessage(t("Campaign map configuration could not be loaded."), "error");
   });
 
   databaseRef.on("value", (snapshot) => {
@@ -1331,7 +1407,7 @@ function initializeFirebaseSync() {
     }
   }, (error) => {
     console.warn("Unable to read marker visibility from Firebase.", error);
-    setAuthMessage("Map sync could not read Firebase data. Check your database rules.", "error");
+    setAuthMessage(t("Map sync could not read Firebase data. Check your database rules."), "error");
   });
 
   customMarkersRef.on("value", (snapshot) => {
@@ -1339,7 +1415,7 @@ function initializeFirebaseSync() {
     applyCustomMarkersSnapshot(data && typeof data === "object" ? data : {});
   }, (error) => {
     console.warn("Unable to read custom markers from Firebase.", error);
-    setDmMarkerStatus("Custom markers could not be loaded from Firebase.", "error");
+    setDmMarkerStatus(t("Custom markers could not be loaded from Firebase."), "error");
   });
 
   markerIconsRef.on("value", (snapshot) => {
@@ -1347,7 +1423,7 @@ function initializeFirebaseSync() {
     applyMarkerIconsSnapshot(data && typeof data === "object" ? data : {});
   }, (error) => {
     console.warn("Unable to read marker icons from Firebase.", error);
-    setAuthMessage("Marker icons could not be loaded. Check your database rules.", "error");
+    setAuthMessage(t("Marker icons could not be loaded. Check your database rules."), "error");
   });
 }
 
@@ -1381,7 +1457,7 @@ async function ensureUserProfile(user, username) {
     existingProfile = snapshot.val();
 
     nextProfile = {
-      username: username || existingProfile?.username || user.displayName || user.email?.split("@")[0] || "player",
+      username: existingProfile?.username || username || user.displayName || user.email?.split("@")[0] || "player",
       displayName: existingProfile?.displayName || existingProfile?.username || username || user.displayName || user.email?.split("@")[0] || "player",
       showInPlayerList: existingProfile?.showInPlayerList ?? true,
       role: existingProfile?.role || "player",
@@ -1434,6 +1510,17 @@ function startCampaignMembershipSync() {
   campaignMembershipsRef.on("value", (snapshot) => {
     const data = snapshot.val();
     campaignMemberships = data && typeof data === "object" ? data : {};
+    if (activeCampaignId && !canAccessCurrentView()) {
+      setPlacementMode(false);
+      stopFirebaseSync();
+      stopPresenceSync();
+      activeCampaignId = "";
+      campaignPickerOpen = true;
+      syncCampaignUrl();
+      applyCampaignRootMap(null);
+      setAuthMessage(t("You no longer have access to this campaign."), "info");
+    }
+    updateAuthCopy();
     updateSessionPanel();
     renderCampaignList();
     updateAppVisibility();
@@ -1454,7 +1541,7 @@ function renderCampaignList() {
 
   if (memberships.length === 0) {
     campaignList.innerHTML = `<p class="location-panel__status">${
-      viewMode === "dm" ? "You are not managing any campaigns yet." : "No campaigns are available for this account."
+      viewMode === "dm" ? t("You are not managing any campaigns yet. Create one below to become its DM.") : t("You have not joined any campaigns. Ask your DM to add your username, or create your own campaign in the DM workspace.")
     }</p>`;
   }
 
@@ -1464,12 +1551,12 @@ function renderCampaignList() {
     card.setAttribute("aria-pressed", String(campaignId === activeCampaignId));
     card.innerHTML = `
       <strong>${escapeHtml(membership.name || campaignId)}</strong>
-      <span>${membership.role === "dm" ? "Dungeon Master" : "Player"}</span>
+      <span data-i18n="${membership.role === "dm" ? "Dungeon Master" : "Player"}">${membership.role === "dm" ? t("Dungeon Master") : t("Player")}</span>
       <div class="session-panel__actions">
-        <button type="button" class="auth-button auth-button--primary" data-campaign-open="${escapeHtml(campaignId)}">Open Map</button>
-        ${membership.role === "dm" ? `
-          <button type="button" class="auth-button" data-campaign-manage="${escapeHtml(campaignId)}">Manage Players</button>
-          <button type="button" class="auth-button auth-button--danger" data-campaign-delete="${escapeHtml(campaignId)}">Delete Campaign</button>
+        <button type="button" class="auth-button auth-button--primary" data-campaign-open="${escapeHtml(campaignId)}" data-i18n="Open Map">${t("Open Map")}</button>
+        ${canManageCampaign(campaignId) ? `
+          <button type="button" class="auth-button" data-campaign-manage="${escapeHtml(campaignId)}" data-i18n="Manage Players">${t("Manage Players")}</button>
+          <button type="button" class="auth-button auth-button--danger" data-campaign-delete="${escapeHtml(campaignId)}" data-i18n="Delete Campaign">${t("Delete Campaign")}</button>
         ` : ""}
       </div>
     `;
@@ -1477,13 +1564,18 @@ function renderCampaignList() {
   }
 
   if (campaignAdmin) {
-    campaignAdmin.hidden = !isAdminProfile(currentUserProfile);
+    campaignAdmin.hidden = viewMode !== "dm";
   }
   if (campaignInviteForm) {
-    campaignInviteForm.hidden = !isCampaignDm();
+    campaignInviteForm.hidden = !canManageCampaign();
   }
-  if (campaignMembers && !isCampaignDm()) {
+  if (campaignMembers && !canManageCampaign()) {
     campaignMembers.hidden = true;
+  }
+  const managementTitle = document.getElementById("campaign-management-title");
+  if (managementTitle) {
+    managementTitle.hidden = !canManageCampaign();
+    setUiText(managementTitle, "Manage players: {name}", { name: campaignMemberships[activeCampaignId]?.name || "" });
   }
 }
 
@@ -1516,15 +1608,14 @@ async function deleteCampaign(campaignId, deleteButton) {
     campaignDeleteBusy ||
     !firebaseDatabase ||
     !currentUser ||
-    membership?.role !== "dm"
+    !canManageCampaign(campaignId)
   ) {
     return;
   }
 
   const campaignName = membership.name || campaignId;
   const shouldDelete = window.confirm(
-    `Permanently delete "${campaignName}"?\n\n` +
-    "This deletes its maps, markers, and player memberships. Cloudinary images remain in your Media Library. This cannot be undone."
+    t('Permanently delete "{name}"?\n\nThis deletes its maps, markers, and player memberships. Cloudinary images remain in your Media Library. This cannot be undone.', { name: campaignName })
   );
   if (!shouldDelete) {
     return;
@@ -1535,7 +1626,7 @@ async function deleteCampaign(campaignId, deleteButton) {
   for (const button of cardButtons) {
     button.disabled = true;
   }
-  setAuthMessage(`Deleting campaign "${campaignName}"...`, "info");
+  setAuthMessage('Deleting campaign "{name}"...', "info", { name: campaignName });
 
   try {
     const memberUids = await getCampaignMemberUids(campaignId);
@@ -1562,29 +1653,31 @@ async function deleteCampaign(campaignId, deleteButton) {
     }
 
     campaignPickerOpen = true;
+    syncCampaignUrl();
     updateAuthCopy();
     updateSessionPanel();
     renderCampaignList();
     updateAppVisibility();
-    setAuthMessage(`Campaign "${campaignName}" was permanently deleted.`, "success");
+    setAuthMessage('Campaign "{name}" was permanently deleted.', "success", { name: campaignName });
   } catch (error) {
     console.error("Unable to delete campaign.", error);
     for (const button of cardButtons) {
       button.disabled = false;
     }
-    setAuthMessage("Campaign could not be deleted. Check your Firebase rules and try again.", "error");
+    setAuthMessage(t("Campaign could not be deleted. Check your Firebase rules and try again."), "error");
   } finally {
     campaignDeleteBusy = false;
   }
 }
 
 async function loadInvitePlayerOptions() {
-  if (!firebaseDatabase || !campaignInvitePlayerSelect || !isCampaignDm()) {
+  if (!firebaseDatabase || !campaignInvitePlayerSelect || !canManageCampaign()) {
     return;
   }
 
   campaignInvitePlayerSelect.disabled = true;
-  campaignInvitePlayerSelect.innerHTML = '<option value="">Loading players...</option>';
+  const campaignId = getCurrentCampaignId();
+  campaignInvitePlayerSelect.innerHTML = `<option value="" data-i18n="Loading players...">${t("Loading players...")}</option>`;
 
   try {
     const playersSnapshot = await firebaseDatabase.ref(USERNAME_DIRECTORY_PATH).once("value");
@@ -1595,45 +1688,51 @@ async function loadInvitePlayerOptions() {
       if (uid === currentUser.uid) {
         continue;
       }
-      const membershipSnapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${getCurrentCampaignId()}`).once("value");
+      const membershipSnapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${campaignId}`).once("value");
       if (!membershipSnapshot.exists()) {
         availablePlayers.push({
           uid,
           username,
-          displayName: username
+          displayName: await loadDisplayName(uid, username)
         });
       }
     }
 
+    if (campaignId !== getCurrentCampaignId() || !isCampaignDm()) return;
     availablePlayers.sort((a, b) => a.displayName.localeCompare(b.displayName));
-    campaignInvitePlayerSelect.innerHTML = '<option value="">Select a player</option>';
+    campaignInvitePlayerSelect.innerHTML = `<option value="" data-i18n="Select a player">${t("Select a player")}</option>`;
 
     for (const player of availablePlayers) {
       const option = document.createElement("option");
       option.value = player.uid;
       option.dataset.username = player.username;
-      option.textContent = `${player.displayName} (${player.username})`;
+      option.dataset.displayName = player.displayName;
+      option.textContent = player.displayName;
+      window.I18n.setAttribute(option, "title", "Sign-in username: {name}", { name: player.username });
       campaignInvitePlayerSelect.append(option);
     }
 
     if (availablePlayers.length === 0) {
-      campaignInvitePlayerSelect.innerHTML = '<option value="">All existing players are already members</option>';
+      campaignInvitePlayerSelect.innerHTML = `<option value="" data-i18n="All existing players are already members">${t("All existing players are already members")}</option>`;
     }
   } catch (error) {
     console.error("Unable to load players for invitation.", error);
-    campaignInvitePlayerSelect.innerHTML = '<option value="">Player list could not be loaded</option>';
+    if (campaignId === getCurrentCampaignId()) {
+      campaignInvitePlayerSelect.innerHTML = `<option value="" data-i18n="Player list could not be loaded">${t("Player list could not be loaded")}</option>`;
+    }
   } finally {
-    campaignInvitePlayerSelect.disabled = false;
+    if (campaignId === getCurrentCampaignId()) campaignInvitePlayerSelect.disabled = false;
   }
 }
 
 async function loadCampaignMemberList() {
-  if (!firebaseDatabase || !campaignMembers || !campaignMemberList || !isCampaignDm()) {
+  if (!firebaseDatabase || !campaignMembers || !campaignMemberList || !canManageCampaign()) {
     return;
   }
 
   campaignMembers.hidden = false;
-  campaignMemberList.innerHTML = '<p class="location-panel__status">Loading current players...</p>';
+  const campaignId = getCurrentCampaignId();
+  campaignMemberList.innerHTML = `<p class="location-panel__status" data-i18n="Loading current players...">${t("Loading current players...")}</p>`;
 
   try {
     const usernamesSnapshot = await firebaseDatabase.ref(USERNAME_DIRECTORY_PATH).once("value");
@@ -1645,18 +1744,19 @@ async function loadCampaignMemberList() {
 
     const members = [];
     for (const [uid, username] of Object.entries(usernameByUid)) {
-      const membershipSnapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${getCurrentCampaignId()}`).once("value");
+      const membershipSnapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${campaignId}`).once("value");
       const membership = membershipSnapshot.val();
       if (membership?.role === "player") {
-        members.push({ uid, username });
+        members.push({ uid, username, displayName: await loadDisplayName(uid, username) });
       }
     }
 
-    members.sort((a, b) => a.username.localeCompare(b.username));
+    if (campaignId !== getCurrentCampaignId() || !isCampaignDm()) return;
+    members.sort((a, b) => a.displayName.localeCompare(b.displayName));
     campaignMemberList.innerHTML = "";
 
     if (members.length === 0) {
-      campaignMemberList.innerHTML = '<p class="location-panel__status">No players are currently in this campaign.</p>';
+      campaignMemberList.innerHTML = `<p class="location-panel__status" data-i18n="No players are currently in this campaign.">${t("No players are currently in this campaign.")}</p>`;
       return;
     }
 
@@ -1664,14 +1764,17 @@ async function loadCampaignMemberList() {
       const item = document.createElement("article");
       item.className = "campaign-member";
       item.innerHTML = `
-        <strong>${escapeHtml(member.username)}</strong>
-        <button type="button" class="auth-button campaign-member__remove" data-remove-campaign-member="${escapeHtml(member.uid)}" data-member-username="${escapeHtml(member.username)}">Remove</button>
+        <strong title="${escapeHtml(t('Sign-in username: {name}', { name: member.username }))}">${escapeHtml(member.displayName)}</strong>
+        <button type="button" class="auth-button campaign-member__remove" data-remove-campaign-member="${escapeHtml(member.uid)}" data-member-username="${escapeHtml(member.displayName)}" data-i18n="Remove">${t("Remove")}</button>
       `;
+      window.I18n.setAttribute(item.querySelector("strong"), "title", "Sign-in username: {name}", { name: member.username });
       campaignMemberList.append(item);
     }
   } catch (error) {
     console.error("Unable to load campaign members.", error);
-    campaignMemberList.innerHTML = '<p class="location-panel__status">Current players could not be loaded.</p>';
+    if (campaignId === getCurrentCampaignId()) {
+      campaignMemberList.innerHTML = `<p class="location-panel__status" data-i18n="Current players could not be loaded.">${t("Current players could not be loaded.")}</p>`;
+    }
   }
 }
 
@@ -1683,15 +1786,19 @@ async function refreshCampaignPlayerManagement() {
 }
 
 function selectCampaign(campaignId, openMap = true) {
+  if (!openMap && !canManageCampaign(campaignId)) return;
   if (!campaignMemberships[campaignId] || (viewMode === "dm" && campaignMemberships[campaignId].role !== "dm")) {
     return;
   }
 
+  setPlacementMode(false);
   stopFirebaseSync();
   stopPresenceSync();
   activeCampaignId = campaignId;
   campaignPickerOpen = !openMap;
+  syncCampaignUrl(openMap ? campaignId : "");
   campaignRootMap = null;
+  applyCustomMarkersSnapshot({});
   applyCampaignRootMap(null);
   applyVisibilitySnapshot(loadMarkerVisibility());
   updateAuthCopy();
@@ -1709,9 +1816,11 @@ function selectCampaign(campaignId, openMap = true) {
 }
 
 function openCampaignPicker() {
+  setPlacementMode(false);
   stopFirebaseSync();
   stopPresenceSync();
   campaignPickerOpen = true;
+  syncCampaignUrl();
   updateAuthCopy();
   renderCampaignList();
   updateAppVisibility();
@@ -1723,33 +1832,36 @@ function updateAuthCopy() {
   }
 
   if (!currentUser) {
-    authCopy.textContent =
+    setUiText(authCopy,
       viewMode === "dm"
-        ? "Only the admin account can open the DM controls for this page."
-        : "Players need an account before they can open the shared map.";
+        ? "Sign in or register to create a campaign and manage your maps and players as a DM."
+        : "One account can host your own campaigns and join others as a player.");
     return;
   }
 
   if (campaignPickerOpen) {
-    authCopy.textContent =
+    setUiText(authCopy,
       viewMode === "dm"
-        ? "Choose a campaign to manage, create a new campaign, or add players."
-        : "Choose one of your campaigns to open its shared map.";
+        ? "Choose a campaign to manage its maps and players, or create a new campaign."
+        : "Choose a campaign to view the places and characters your DM has revealed.");
     return;
   }
 
   if (viewMode === "dm" && !canAccessCurrentView()) {
-    authCopy.textContent = "This account is signed in, but it does not have DM access.";
+    setUiText(authCopy, t("This account is signed in, but it does not have DM access."));
     return;
   }
 
-  authCopy.textContent =
+  setUiText(authCopy,
     viewMode === "dm"
       ? "You are signed in with the DM account."
-      : "You are signed in and can open the player map.";
+      : "You are signed in and can open the player map.");
 }
 
 function updateSessionPanel() {
+  if (userCenterOpen) userCenterOpen.hidden = !currentUser || !currentUserProfile;
+  if (userCenterName) userCenterName.textContent = currentUser ? getDisplayName() : "";
+  if (!currentUser && userCenter?.open) userCenter.close();
   if (!sessionPanel || !sessionSummary) {
     return;
   }
@@ -1779,25 +1891,25 @@ function updateSessionPanel() {
     authForm.hidden = true;
   }
 
-  const roleLabel = isAdminProfile(currentUserProfile) ? "admin" : "player";
+  const roleLabel = activeCampaignId ? (isCampaignDm() ? "DM" : t("Player")) : t("Adventurer");
   sessionPanel.hidden = false;
   const campaignName = campaignMemberships[getCurrentCampaignId()]?.name;
-  sessionSummary.textContent = `Signed in as ${getDisplayName()} (${roleLabel})${campaignName ? ` in ${campaignName}` : "."}`;
-
-  if (displayNameInput && viewMode === "player") {
-    displayNameInput.value = getDisplayName();
-  }
-
-  if (displayNameVisibleInput && viewMode === "player") {
-    displayNameVisibleInput.checked = currentUserProfile?.showInPlayerList !== false;
-  }
+  sessionSummary.textContent = `${getDisplayName()} · ${roleLabel}${campaignName ? ` · ${campaignName}` : ""}`;
 
   if (dmLink) {
-    dmLink.hidden = !isAdminProfile(currentUserProfile);
+    dmLink.hidden = false;
+    dmLink.href = getCampaignViewUrl("dm", isCampaignDm() ? activeCampaignId : "");
   }
 
   if (playerLink) {
-    playerLink.hidden = !isAdminProfile(currentUserProfile);
+    playerLink.hidden = false;
+    playerLink.href = getCampaignViewUrl("player");
+  }
+  const mapViewSwitch = document.getElementById("map-view-switch");
+  if (mapViewSwitch) {
+    mapViewSwitch.hidden = viewMode === "player" && !isCampaignDm();
+    setUiText(mapViewSwitch, viewMode === "dm" ? t("Player Preview") : t("DM Workspace"));
+    mapViewSwitch.href = getCampaignViewUrl(viewMode === "dm" ? "player" : "dm");
   }
 }
 
@@ -1829,10 +1941,6 @@ function updateAppVisibility() {
     presencePanel.hidden = !allowed || campaignPickerOpen || viewMode !== "player";
   }
 
-  if (displayNameForm) {
-    displayNameForm.hidden = !allowed || campaignPickerOpen || viewMode !== "player";
-  }
-
   if (allowed && !campaignPickerOpen) {
     applyAllMarkerStates();
     updateMapHeader();
@@ -1858,7 +1966,7 @@ function syncDmControl(marker, container) {
 
   const revealed = isMarkerRevealed(marker);
   control.setAttribute("aria-pressed", String(revealed));
-  control.textContent = revealed ? "Visible to Players" : "Hidden from Players";
+  setUiText(control, revealed ? t("Visible to Players") : t("Hidden from Players"));
   control
     .closest(".dm-marker-item")
     ?.classList.toggle("dm-marker-item--hidden", !revealed);
@@ -1872,13 +1980,13 @@ function formatMarkerType(type) {
 
   switch (type) {
     case "information":
-      return "Information";
+      return t("Information");
     case "npc":
-      return "NPC";
+      return t("NPC");
     case "portrait":
-      return "Portrait";
+      return t("Portrait");
     default:
-      return "Location";
+      return t("Location");
   }
 }
 
@@ -1891,12 +1999,12 @@ function createDmControlItem(marker, container) {
 
   const title = document.createElement("p");
   title.className = "dm-marker-item__title";
-  title.textContent = marker.dataset.locationName || "Unnamed location";
+  title.textContent = marker.dataset.locationName || t("Unnamed location");
 
   const meta = document.createElement("p");
   meta.className = "dm-marker-item__meta";
   const markerType = marker.dataset.locationType || "location";
-  const markerKind = marker.dataset.mapSrc ? "Big Map" : formatMarkerType(markerType);
+  const markerKind = marker.dataset.mapSrc ? t("Big Map") : formatMarkerType(markerType);
   const assignedIcon = MARKER_ICON_BY_ID.get(getAssignedMarkerIconId(marker));
   const iconLabel = assignedIcon && assignedIcon.label !== markerKind ? ` - ${assignedIcon.label}` : "";
   meta.textContent = `${markerKind} - ${marker.dataset.locationId || ""}${iconLabel}`;
@@ -1908,7 +2016,7 @@ function createDmControlItem(marker, container) {
     const iconButton = document.createElement("button");
     iconButton.type = "button";
     iconButton.className = "dm-marker-item__icon";
-    iconButton.textContent = "Change Icon";
+    setUiText(iconButton, t("Change Icon"));
     iconButton.addEventListener("click", () => {
       showMarkerDetails(marker, { iconOnly: true });
     });
@@ -1933,7 +2041,7 @@ function createDmControlItem(marker, container) {
     const removeButton = document.createElement("button");
     removeButton.type = "button";
     removeButton.className = "dm-marker-item__delete";
-    removeButton.textContent = "Delete";
+    setUiText(removeButton, t("Delete"));
     removeButton.addEventListener("click", () => {
       deleteCustomMarker(marker);
     });
@@ -1973,10 +2081,10 @@ function applyViewMode() {
   document.body.dataset.view = viewMode;
 
   if (viewIntro) {
-    viewIntro.textContent =
+    setUiText(viewIntro,
       viewMode === "dm"
-        ? "DM view: reveal or hide each map marker, then share the player view."
-        : "Player view: only the locations revealed by the DM are visible.";
+        ? "Build your world, manage maps and players, and reveal your adventure one location at a time."
+        : "Choose your campaign, explore its maps, and discover the places and characters revealed by your DM.");
   }
 
   if (markerToggle) {
@@ -2023,20 +2131,20 @@ function syncPortraitRailHeight() {
 }
 
 function getMapReturnTitle(map) {
-  const title = map?.title || "previous map";
+  const title = map?.title || t("previous map");
   return title.replace(/^Map of\s+/i, "").trim() || title;
 }
 
 function updateMapHeader() {
   if (mapTitle) {
-    mapTitle.textContent = currentMap.title;
+    mapTitle.textContent = campaignRootMap ? currentMap.title : t("Campaign Map");
   }
 
   if (mapReturn) {
     const previousMap = mapHistory.length > 1 ? mapHistory[mapHistory.length - 2] : null;
-    mapReturn.hidden = currentMap.id === ROOT_MAP.id || !previousMap;
+    mapReturn.hidden = !previousMap;
     if (previousMap) {
-      mapReturn.textContent = `Return to ${getMapReturnTitle(previousMap)}`;
+      setUiText(mapReturn, "Return to {name}", { name: getMapReturnTitle(previousMap) });
     }
   }
 }
@@ -2063,7 +2171,7 @@ markerToggle?.addEventListener("click", () => {
   const nextVisible = !markersVisible;
 
   markerToggle.setAttribute("aria-pressed", String(nextVisible));
-  markerToggle.textContent = nextVisible ? "Hide Markers" : "Show Markers";
+  setUiText(markerToggle, nextVisible ? t("Hide Markers") : t("Show Markers"));
   mapStage?.classList.toggle("map-stage--markers-hidden", !nextVisible);
 });
 
@@ -2093,7 +2201,7 @@ function renderMarkerFallback(marker) {
 
   const imageSrc = marker.dataset.imageSrc;
   if (!imageSrc) {
-    locationPanelBody.innerHTML = '<p class="location-panel__status">No content is available for this marker yet.</p>';
+    locationPanelBody.innerHTML = `<p class="location-panel__status" data-i18n="No content is available for this marker yet.">${t("No content is available for this marker yet.")}</p>`;
     return;
   }
 
@@ -2101,7 +2209,7 @@ function renderMarkerFallback(marker) {
     <div class="location-panel__split location-panel__split--portrait">
       <img
         src="${imageSrc}"
-        alt="${marker.dataset.imageAlt || marker.dataset.locationName || "Portrait"}"
+        alt="${marker.dataset.imageAlt || marker.dataset.locationName || t("Portrait")}"
         class="location-panel__image location-panel__image--portrait"
       >
       <div class="location-panel__content">
@@ -2133,18 +2241,18 @@ async function switchMap(nextMap, options = {}) {
   await wait(180);
 
   mapImage.src = nextMap.src;
-  mapImage.alt = nextMap.alt || "Map";
+  mapImage.alt = nextMap.alt || t("Map");
   currentMap = { ...nextMap };
   updateMapHeader();
   applyAllMarkerStates();
   renderDmControls();
 
   if (locationEyebrow) {
-    locationEyebrow.textContent = "Selected Location";
+    setUiText(locationEyebrow, t("Selected Location"));
   }
 
   if (locationTitle) {
-    locationTitle.textContent = nextMap.title || "Location";
+    locationTitle.textContent = nextMap.title || t("Location");
   }
 
   if (locationPanelBody) {
@@ -2164,8 +2272,8 @@ async function showMapImage(marker) {
   await switchMap({
     id: marker.dataset.targetMapId || marker.dataset.locationId || ROOT_MAP.id,
     src: marker.dataset.mapSrc,
-    alt: marker.dataset.mapAlt || marker.dataset.locationName || "Map",
-    title: marker.dataset.targetMapTitle || marker.dataset.locationName || "Map"
+    alt: marker.dataset.mapAlt || marker.dataset.locationName || t("Map"),
+    title: marker.dataset.targetMapTitle || marker.dataset.locationName || t("Map")
   });
 }
 
@@ -2190,17 +2298,17 @@ async function buildCustomMarkerRecord(position = null) {
   const targetMapId = getMapIdFromTitle(targetMapTitle);
 
   if (markerType !== "npc" && !MARKER_ICON_BY_ID.has(markerType)) {
-    setDmMarkerStatus("Choose a valid marker type.", "error");
+    setDmMarkerStatus(t("Choose a valid marker type."), "error");
     return null;
   }
 
   if (!title) {
-    setDmMarkerStatus(isNpcMarker ? "Add a title before creating the NPC." : "Add a title before placing the marker.", "error");
+    setDmMarkerStatus(isNpcMarker ? t("Add a title before creating the NPC.") : t("Add a title before placing the marker."), "error");
     return null;
   }
 
   if (!isNpcMarker && !position) {
-    setDmMarkerStatus("Click the map to choose where this marker should appear.", "error");
+    setDmMarkerStatus(t("Click the map to choose where this marker should appear."), "error");
     return null;
   }
 
@@ -2212,25 +2320,25 @@ async function buildCustomMarkerRecord(position = null) {
 
   if (!imageUploadFile && imageFileName) {
     if (!isSafeImageFileName(imageFileName)) {
-      setDmMarkerStatus("Use an image file name ending in .jpg, .jpeg, .png, .webp, .gif, or .avif.", "error");
+      setDmMarkerStatus(t("Use an image file name ending in .jpg, .jpeg, .png, .webp, .gif, or .avif."), "error");
       return null;
     }
 
     const imageExists = await imageExistsAtPath(imagePath);
     if (!imageExists) {
-      setDmMarkerStatus(`Could not find "${imageFileName}" in assets/images. Upload it there first.`, "error");
+      setDmMarkerStatus('Could not find "{name}" in assets/images. Upload it there first.', "error", { name: imageFileName });
       return null;
     }
   }
 
   if (isMapMarker) {
     if (!targetMapTitle) {
-      setDmMarkerStatus("Add a map name before placing a big map marker.", "error");
+      setDmMarkerStatus(t("Add a map name before placing a big map marker."), "error");
       return null;
     }
 
     if (!targetMapId) {
-      setDmMarkerStatus("Use at least one letter or number in the map name.", "error");
+      setDmMarkerStatus(t("Use at least one letter or number in the map name."), "error");
       return null;
     }
 
@@ -2241,14 +2349,14 @@ async function buildCustomMarkerRecord(position = null) {
     }
 
     if (!mapImageUploadFile && !isSafeImageFileName(mapImageFileName)) {
-      setDmMarkerStatus("Choose an existing map image or upload a new one.", "error");
+      setDmMarkerStatus(t("Choose an existing map image or upload a new one."), "error");
       return null;
     }
 
     if (!mapImageUploadFile) {
       const mapImageExists = await imageExistsAtPath(mapSrc);
       if (!mapImageExists) {
-        setDmMarkerStatus(`Could not find "${mapImageFileName}" in assets/images.`, "error");
+        setDmMarkerStatus('Could not find "{name}" in assets/images.', "error", { name: mapImageFileName });
         return null;
       }
     }
@@ -2256,21 +2364,21 @@ async function buildCustomMarkerRecord(position = null) {
 
   try {
     if (imageUploadFile) {
-      setDmMarkerStatus("Uploading marker image to Cloudinary...", "info");
+      setDmMarkerStatus(t("Uploading marker image to Cloudinary..."), "info");
       const upload = await uploadImageToCloudinary(imageUploadFile);
       imageFileName = upload.fileName;
       imagePath = upload.path;
     }
 
     if (isMapMarker && mapImageUploadFile) {
-      setDmMarkerStatus("Uploading map image to Cloudinary...", "info");
+      setDmMarkerStatus(t("Uploading map image to Cloudinary..."), "info");
       const upload = await uploadImageToCloudinary(mapImageUploadFile);
       mapImageFileName = upload.fileName;
       mapSrc = upload.path;
     }
   } catch (error) {
     console.error("Unable to upload marker image.", error);
-    setDmMarkerStatus(error?.message || "Image upload failed. Try again.", "error");
+    setDmMarkerStatus(error?.message || t("Image upload failed. Try again."), "error");
     return null;
   }
 
@@ -2278,7 +2386,7 @@ async function buildCustomMarkerRecord(position = null) {
   const markerId = markerRef.key;
 
   if (!markerId) {
-    setDmMarkerStatus("Firebase did not return a marker id.", "error");
+    setDmMarkerStatus(t("Firebase did not return a marker id."), "error");
     return null;
   }
 
@@ -2324,26 +2432,26 @@ function resetDmMarkerForm() {
   syncMapMarkerFields();
 }
 
-async function saveCustomMarker(markerRef, markerRecord, successMessage) {
+async function saveCustomMarker(markerRef, markerRecord, successMessage, successValues = {}) {
   try {
     const markerId = markerRef.key;
     const updates = {
-      [`${getCampaignPath("maps/barovia/customMarkers")}/${markerId}`]: markerRecord
+      [`${getMapDataPath("customMarkers")}/${markerId}`]: markerRecord
     };
     if (MARKER_ICON_BY_ID.has(markerRecord.type)) {
       const markerIconKey = encodeURIComponent(getCustomMarkerVisibilityKey(markerRecord));
-      updates[`${getCampaignPath("maps/barovia/markerIcons")}/${markerIconKey}`] = markerRecord.type;
+      updates[`${getMapDataPath("markerIcons")}/${markerIconKey}`] = markerRecord.type;
     }
     await firebaseDatabase.ref().update(updates);
     markerVisibility[getCustomMarkerVisibilityKey(markerRecord)] = markerRecord.visible !== false;
     saveMarkerVisibility();
     broadcastVisibilityState();
     setPlacementMode(false);
-    setDmMarkerStatus(successMessage, "success");
+    setDmMarkerStatus(successMessage, "success", successValues);
     resetDmMarkerForm();
   } catch (error) {
     console.error("Unable to create custom marker.", error);
-    setDmMarkerStatus("Marker could not be saved. Check your Firebase rules.", "error");
+    setDmMarkerStatus(t("Marker could not be saved. Check your Firebase rules."), "error");
   }
 }
 
@@ -2361,7 +2469,7 @@ async function createCustomNpcMarker() {
     }
 
     const { markerRef, markerRecord } = result;
-    await saveCustomMarker(markerRef, markerRecord, `NPC "${markerRecord.title}" added to ${currentMap.title}.`);
+    await saveCustomMarker(markerRef, markerRecord, 'NPC "{name}" added to {map}.', { name: markerRecord.title, map: currentMap.title });
   } finally {
     markerSaveBusy = false;
     dmMarkerPlacementButton.disabled = false;
@@ -2382,7 +2490,7 @@ async function createCustomMarkerAtPosition(x, y) {
     }
 
     const { markerRef, markerRecord } = result;
-    await saveCustomMarker(markerRef, markerRecord, `Marker "${markerRecord.title}" added to ${currentMap.title}.`);
+    await saveCustomMarker(markerRef, markerRecord, 'Marker "{name}" added to {map}.', { name: markerRecord.title, map: currentMap.title });
   } finally {
     markerSaveBusy = false;
     dmMarkerPlacementButton.disabled = false;
@@ -2395,7 +2503,7 @@ async function deleteCustomMarker(marker) {
   }
 
   const markerId = marker.dataset.locationId;
-  const markerName = marker.dataset.locationName || "this marker";
+  const markerName = marker.dataset.locationName || t("this marker");
 
   if (
     !markerId ||
@@ -2407,15 +2515,15 @@ async function deleteCustomMarker(marker) {
     return;
   }
 
-  const shouldDelete = window.confirm(`Delete "${markerName}"? This cannot be undone.`);
+  const shouldDelete = window.confirm(t('Delete "{name}"? This cannot be undone.', { name: markerName }));
   if (!shouldDelete) {
     return;
   }
 
   try {
     const updates = {
-      [`${getCampaignPath("maps/barovia/customMarkers")}/${markerId}`]: null,
-      [`${getCampaignPath("maps/barovia/markerIcons")}/${getMarkerIconStorageKey(marker)}`]: null
+      [`${getMapDataPath("customMarkers")}/${markerId}`]: null,
+      [`${getMapDataPath("markerIcons")}/${getMarkerIconStorageKey(marker)}`]: null
     };
     await firebaseDatabase.ref().update(updates);
     delete markerVisibility[getMarkerVisibilityKey(marker)];
@@ -2426,10 +2534,10 @@ async function deleteCustomMarker(marker) {
       locationPanel.hidden = true;
     }
 
-    setDmMarkerStatus(`Marker "${markerName}" deleted.`, "success");
+    setDmMarkerStatus('Marker "{name}" deleted.', "success", { name: markerName });
   } catch (error) {
     console.error("Unable to delete custom marker.", error);
-    setDmMarkerStatus("Marker could not be deleted. Check your Firebase rules.", "error");
+    setDmMarkerStatus(t("Marker could not be deleted. Check your Firebase rules."), "error");
   }
 }
 
@@ -2445,7 +2553,7 @@ dmMarkerPlacementButton?.addEventListener("click", () => {
 
   const title = dmMarkerTitleInput?.value.trim() || "";
   if (!title) {
-    setDmMarkerStatus("Add a title before entering placement mode.", "error");
+    setDmMarkerStatus(t("Add a title before entering placement mode."), "error");
     return;
   }
 
@@ -2490,15 +2598,15 @@ function getFriendlyAuthError(error) {
     case "auth/user-not-found":
     case "auth/wrong-password":
     case "auth/invalid-login-credentials":
-      return "That username and password combination did not match.";
+      return t("That username and password combination did not match.");
     case "auth/email-already-in-use":
-      return "That username already exists. Try signing in instead.";
+      return t("That username already exists. Try signing in instead.");
     case "auth/weak-password":
-      return "Choose a password with at least 6 characters.";
+      return t("Choose a password with at least 6 characters.");
     case "auth/network-request-failed":
-      return "Firebase could not be reached. Check your internet connection.";
+      return t("Firebase could not be reached. Check your internet connection.");
     default:
-      return error?.message || "Authentication failed.";
+      return error?.message || t("Authentication failed.");
   }
 }
 
@@ -2522,31 +2630,37 @@ campaignCreateForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = String(campaignNameInput?.value || "").trim();
 
-  if (!firebaseDatabase || !currentUser || !isAdminProfile(currentUserProfile) || !name || name.length > 60) {
-    setAuthMessage("Enter a campaign name with 1-60 characters.", "error");
+  if (viewMode !== "dm" || campaignCreateBusy) return;
+  if (!firebaseDatabase || !currentUser || !name || name.length > 60) {
+    setAuthMessage(t("Enter a campaign name with 1-60 characters."), "error");
     return;
   }
 
+  const submitButton = campaignCreateForm.querySelector('button[type="submit"]');
+  campaignCreateBusy = true;
+  submitButton.disabled = true;
   try {
     const campaignId = createCampaignId(name);
     const createdAt = new Date().toISOString();
-    await firebaseDatabase.ref(`campaigns/${campaignId}`).set({
-      name,
-      ownerUid: currentUser.uid,
-      createdAt
-    });
-    await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${currentUser.uid}/${campaignId}`).set({
+    const membership = {
       name,
       role: "dm",
-      joinedAt: createdAt
+      joinedAt: createdAt,
+      schemaVersion: 2
+    };
+    await firebaseDatabase.ref().update({
+      [`campaigns/${campaignId}`]: { name, ownerUid: currentUser.uid, createdAt, schemaVersion: 2 },
+      [`${USER_CAMPAIGNS_PATH}/${currentUser.uid}/${campaignId}`]: membership
     });
+    campaignMemberships[campaignId] = membership;
     campaignNameInput.value = "";
-    await loadCampaignMemberships();
-    renderCampaignList();
-    setAuthMessage(`Campaign "${name}" created.`, "success");
+    selectCampaign(campaignId, true);
   } catch (error) {
     console.error("Unable to create campaign.", error);
-    setAuthMessage("Campaign could not be created. Check your Firebase rules.", "error");
+    setAuthMessage(t("Campaign could not be created. Check your Firebase rules."), "error");
+  } finally {
+    campaignCreateBusy = false;
+    submitButton.disabled = false;
   }
 });
 
@@ -2557,14 +2671,14 @@ rootMapForm?.addEventListener("submit", async (event) => {
   let fileName = normalizeImageFileName(rootMapImageFileInput?.value || "");
   let imageSrc = getImagePathFromFileName(fileName);
 
-  if (!firebaseDatabase || !isCampaignDm() || !title) {
-    setAuthMessage("Enter a map title and choose or upload an image.", "error");
+  if (!firebaseDatabase || !canManageCampaign() || !title) {
+    setAuthMessage(t("Enter a map title and choose or upload an image."), "error");
     return;
   }
 
   const uploadError = getImageUploadValidationError(uploadFile);
   if (uploadError || (!uploadFile && !isSafeImageFileName(fileName))) {
-    setAuthMessage(uploadError || "Choose an existing map image or upload a new one.", "error");
+    setAuthMessage(uploadError || t("Choose an existing map image or upload a new one."), "error");
     return;
   }
 
@@ -2572,19 +2686,19 @@ rootMapForm?.addEventListener("submit", async (event) => {
   submitButton.disabled = true;
   if (rootMapStatus) {
     rootMapStatus.hidden = false;
-    rootMapStatus.textContent = "Saving starting map...";
+    setUiText(rootMapStatus, t("Saving starting map..."));
     rootMapStatus.dataset.state = "info";
   }
 
   try {
     if (uploadFile) {
-      rootMapStatus.textContent = "Uploading starting map to Cloudinary...";
+      setUiText(rootMapStatus, t("Uploading starting map to Cloudinary..."));
       const upload = await uploadImageToCloudinary(uploadFile);
       fileName = upload.fileName;
       imageSrc = upload.path;
     }
 
-    rootMapStatus.textContent = "Saving starting map...";
+    setUiText(rootMapStatus, t("Saving starting map..."));
     await firebaseDatabase.ref(getCampaignPath("rootMap")).set({
       id: "root",
       title,
@@ -2594,11 +2708,11 @@ rootMapForm?.addEventListener("submit", async (event) => {
     });
 
     rootMapForm.reset();
-    rootMapStatus.textContent = "Starting map saved.";
+    setUiText(rootMapStatus, t("Starting map saved."));
     rootMapStatus.dataset.state = "success";
   } catch (error) {
     console.error("Unable to save campaign starting map.", error);
-    rootMapStatus.textContent = error?.message || "Starting map could not be saved.";
+    setUiText(rootMapStatus, error?.message || t("Starting map could not be saved."));
     rootMapStatus.dataset.state = "error";
   } finally {
     submitButton.disabled = false;
@@ -2609,11 +2723,11 @@ campaignInviteForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const invitedUid = campaignInvitePlayerSelect?.value || "";
   const selectedOption = campaignInvitePlayerSelect?.selectedOptions?.[0];
-  const username = selectedOption?.dataset.username || "Selected player";
+  const username = selectedOption?.dataset.displayName || selectedOption?.dataset.username || t("Selected player");
   const membership = campaignMemberships[getCurrentCampaignId()];
 
-  if (!firebaseDatabase || !currentUser || !isCampaignDm() || !invitedUid || !membership) {
-    setAuthMessage("Select a player and a campaign you manage.", "error");
+  if (!firebaseDatabase || !currentUser || !canManageCampaign() || !invitedUid || !membership) {
+    setAuthMessage(t("Select a player and a campaign you manage."), "error");
     return;
   }
 
@@ -2621,39 +2735,42 @@ campaignInviteForm?.addEventListener("submit", async (event) => {
     await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${invitedUid}/${getCurrentCampaignId()}`).set({
       name: membership.name || getCurrentCampaignId(),
       role: "player",
-      joinedAt: new Date().toISOString()
+      joinedAt: new Date().toISOString(),
+      ...(membership.schemaVersion === 2 ? { schemaVersion: 2 } : {})
     });
     await refreshCampaignPlayerManagement();
-    setAuthMessage(`${username} can now see ${membership.name || "this campaign"}.`, "success");
+    setAuthMessage("{name} can now see {campaign}.", "success", { name: username, campaign: membership.name || t("this campaign") });
   } catch (error) {
     console.error("Unable to invite player.", error);
-    setAuthMessage("Player could not be added. Check the username and Firebase rules.", "error");
+    setAuthMessage(t("Player could not be added. Check the username and Firebase rules."), "error");
   }
 });
 
 campaignMemberList?.addEventListener("click", async (event) => {
   const removeButton = event.target.closest("[data-remove-campaign-member]");
-  if (!removeButton || !firebaseDatabase || !isCampaignDm()) {
+  if (!removeButton || !firebaseDatabase || !canManageCampaign()) {
     return;
   }
 
   const uid = removeButton.dataset.removeCampaignMember;
-  const username = removeButton.dataset.memberUsername || "this player";
-  const shouldRemove = window.confirm(`Remove ${username} from this campaign?`);
+  const username = removeButton.dataset.memberUsername || t("this player");
+  const shouldRemove = window.confirm(t("Remove {name} from this campaign?", { name: username }));
   if (!shouldRemove) {
     return;
   }
 
   removeButton.disabled = true;
   try {
-    await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${getCurrentCampaignId()}`).remove();
-    await firebaseDatabase.ref(`${getCampaignPath("playerDirectory")}/${uid}`).remove();
+    await firebaseDatabase.ref().update({
+      [`${USER_CAMPAIGNS_PATH}/${uid}/${getCurrentCampaignId()}`]: null,
+      [`${getCampaignPath("playerDirectory")}/${uid}`]: null
+    });
     await refreshCampaignPlayerManagement();
-    setAuthMessage(`${username} was removed from this campaign.`, "success");
+    setAuthMessage("{name} was removed from this campaign.", "success", { name: username });
   } catch (error) {
     console.error("Unable to remove campaign member.", error);
     removeButton.disabled = false;
-    setAuthMessage("Player could not be removed. Check your Firebase rules.", "error");
+    setAuthMessage(t("Player could not be removed. Check your Firebase rules."), "error");
   }
 });
 
@@ -2686,17 +2803,17 @@ authForm?.addEventListener("submit", async (event) => {
   const password = authPasswordInput?.value || "";
 
   if (!isValidUsername(username)) {
-    setAuthMessage("Use a username with 3-24 letters, numbers, dots, underscores, or dashes.", "error");
+    setAuthMessage(t("Use a username with 3-24 letters, numbers, dots, underscores, or dashes."), "error");
     return;
   }
 
   if (password.length < 6) {
-    setAuthMessage("Choose a password with at least 6 characters.", "error");
+    setAuthMessage(t("Choose a password with at least 6 characters."), "error");
     return;
   }
 
   setAuthBusy(true);
-  setAuthMessage("Signing in...", "info");
+  setAuthMessage(t("Signing in..."), "info");
 
   try {
     await signInWithUsername(username, password);
@@ -2714,22 +2831,22 @@ authSignupButton?.addEventListener("click", async () => {
   const password = authPasswordInput?.value || "";
 
   if (!isValidUsername(username)) {
-    setAuthMessage("Use a username with 3-24 letters, numbers, dots, underscores, or dashes.", "error");
+    setAuthMessage(t("Use a username with 3-24 letters, numbers, dots, underscores, or dashes."), "error");
     return;
   }
 
   if (password.length < 6) {
-    setAuthMessage("Choose a password with at least 6 characters.", "error");
+    setAuthMessage(t("Choose a password with at least 6 characters."), "error");
     return;
   }
 
   setAuthBusy(true);
-  setAuthMessage("Creating account...", "info");
+  setAuthMessage(t("Creating account..."), "info");
 
   try {
     await createUserWithUsername(username, password);
     authPasswordInput.value = "";
-    setAuthMessage("Account created. You are now signed in.", "success");
+    setAuthMessage(t("Account created. You are now signed in."), "success");
   } catch (error) {
     setAuthMessage(getFriendlyAuthError(error), "error");
   } finally {
@@ -2746,7 +2863,7 @@ authSignoutButton?.addEventListener("click", async () => {
     setPlacementMode(false);
     stopPresenceSync();
     await firebaseAuth.signOut();
-    setAuthMessage("Signed out.", "info");
+    setAuthMessage(t("Signed out."), "info");
   } catch (error) {
     setAuthMessage(getFriendlyAuthError(error), "error");
   }
@@ -2761,7 +2878,7 @@ appSignoutButton?.addEventListener("click", async () => {
     setPlacementMode(false);
     stopPresenceSync();
     await firebaseAuth.signOut();
-    setAuthMessage("Signed out.", "info");
+    setAuthMessage(t("Signed out."), "info");
   } catch (error) {
     setAuthMessage(getFriendlyAuthError(error), "error");
   }
@@ -2770,28 +2887,47 @@ appSignoutButton?.addEventListener("click", async () => {
 displayNameForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  if (!firebaseDatabase || !currentUser || !currentUserProfile) {
+  if (!firebaseDatabase || !currentUser || !currentUserProfile || profileSaveBusy) {
     return;
   }
 
   const nextDisplayName = normalizeDisplayName(displayNameInput?.value || "");
 
   if (!isValidDisplayName(nextDisplayName)) {
-    setDisplayNameStatus("Display name must be 1-24 characters.", "error");
+    setDisplayNameStatus(t("Display name must contain 1–24 characters and cannot be blank."), "error");
     return;
   }
 
+  profileSaveBusy = true;
+  const uid = currentUser.uid;
+  const profile = currentUserProfile;
   if (displayNameSaveButton) {
     displayNameSaveButton.disabled = true;
   }
 
   try {
     const showInPlayerList = displayNameVisibleInput?.checked ?? true;
-    await firebaseDatabase.ref(`${USERS_PATH}/${currentUser.uid}`).update({
-      displayName: nextDisplayName,
-      showInPlayerList,
-      lastLoginAt: new Date().toISOString()
-    });
+    setDisplayNameStatus(t("Saving…"), "info");
+    // Refresh memberships so a removed campaign cannot block unrelated profile edits.
+    const snapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}`).once("value");
+    const memberships = snapshot.val() || {};
+    const updates = {
+      [`${USERS_PATH}/${uid}/displayName`]: nextDisplayName,
+      [`${USERS_PATH}/${uid}/showInPlayerList`]: showInPlayerList
+    };
+    for (const [campaignId, membership] of Object.entries(memberships)) {
+      if (membership?.role !== "player") continue;
+      updates[`campaigns/${campaignId}/playerDirectory/${uid}`] = {
+        username: profile.username,
+        displayName: nextDisplayName,
+        role: "player",
+        showInPlayerList,
+        lastUpdated: Date.now()
+      };
+    }
+    if (currentUser?.uid !== uid) return;
+    await firebaseDatabase.ref().update(updates);
+    if (currentUser?.uid !== uid) return;
 
     currentUserProfile = {
       ...currentUserProfile,
@@ -2799,14 +2935,13 @@ displayNameForm?.addEventListener("submit", async (event) => {
       showInPlayerList
     };
 
-    await syncCurrentPlayerDirectoryProfile();
-
     updateSessionPanel();
-    setDisplayNameStatus("Player list settings updated.", "success");
+    setDisplayNameStatus(t("Saved. Your party will see your new name."), "success");
   } catch (error) {
     console.error("Unable to update display name.", error);
-    setDisplayNameStatus("Player list settings could not be updated. Check your Firebase rules.", "error");
+    if (currentUser?.uid === uid) setDisplayNameStatus(t("Could not save. Check your connection and try again."), "error");
   } finally {
+    profileSaveBusy = false;
     if (displayNameSaveButton) {
       displayNameSaveButton.disabled = false;
     }
@@ -2814,6 +2949,8 @@ displayNameForm?.addEventListener("submit", async (event) => {
 });
 
 async function handleAuthStateChanged(user) {
+  userProfileRef?.off();
+  userProfileRef = null;
   currentUser = user;
   currentUserProfile = null;
   activeCampaignId = "";
@@ -2822,6 +2959,8 @@ async function handleAuthStateChanged(user) {
   stopFirebaseSync();
   stopPresenceSync();
   stopCampaignMembershipSync();
+  setPlacementMode(false);
+  applyCampaignRootMap(null);
 
   if (!user) {
     updateAuthCopy();
@@ -2829,7 +2968,7 @@ async function handleAuthStateChanged(user) {
     updateAppVisibility();
     setAuthBusy(false);
     if (viewMode === "dm") {
-      setAuthMessage("Sign in with the admin account to open the DM page.", "info");
+      setAuthMessage(t("Sign in or register to create and manage your own campaigns."), "info");
     } else if (!authMessage?.textContent) {
       setAuthMessage("", "info");
     }
@@ -2852,10 +2991,11 @@ async function handleAuthStateChanged(user) {
     console.warn("Unable to finish loading the signed-in user profile.", error);
     currentUserProfile = await loadUserProfile(user.uid);
     if (!currentUserProfile) {
-      setAuthMessage("Signed in, but the user profile could not be loaded. Check Firebase rules.", "error");
+      setAuthMessage(t("Signed in, but the user profile could not be loaded. Check Firebase rules."), "error");
     }
   }
 
+  startUserProfileSync();
   updateAuthCopy();
   updateSessionPanel();
   try {
@@ -2863,9 +3003,16 @@ async function handleAuthStateChanged(user) {
     startCampaignMembershipSync();
     updateSessionPanel();
     renderCampaignList();
+    const requestedCampaign = new URLSearchParams(window.location.search).get("campaign");
+    if (requestedCampaign && campaignMemberships[requestedCampaign] &&
+        (viewMode !== "dm" || isCampaignDm(requestedCampaign))) {
+      selectCampaign(requestedCampaign, true);
+    } else if (requestedCampaign) {
+      syncCampaignUrl();
+    }
   } catch (error) {
     console.error("Unable to load campaigns.", error);
-    setAuthMessage("Campaigns could not be loaded. Publish the updated Firebase rules and try again.", "error");
+    setAuthMessage(t("Campaigns could not be loaded. Publish the updated Firebase rules and try again."), "error");
   }
   updateAppVisibility();
   if (Object.keys(campaignMemberships).length > 0) {
@@ -2882,6 +3029,26 @@ function initializeAuth() {
     handleAuthStateChanged(user);
   });
 }
+
+window.addEventListener("languagechange", () => {
+  // Update UI only; keep selected maps, uploads, open dialogs and unsaved form values.
+  applyViewMode();
+  updateAuthCopy();
+  updateSessionPanel();
+  renderMapLegend();
+  renderCampaignList();
+  updateMapHeader();
+  if (viewMode === "dm" && canAccessCurrentView() && !campaignPickerOpen) renderDmControls();
+  const editor = locationPanelBody?.querySelector(".marker-icon-editor");
+  if (editor) {
+    updateMarkerIconPreview(
+      editor.querySelector(".marker-icon-editor__preview-image"),
+      editor.querySelector(".marker-icon-editor__default-preview"),
+      editor.querySelector("select").value
+    );
+  }
+  window.I18n.apply();
+});
 
 window.addEventListener("resize", syncPortraitRailHeight);
 
