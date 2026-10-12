@@ -12,14 +12,44 @@ class Snapshot {
   child(key) { return new Snapshot(this.tree, [...this.parts, ...key.split('/')]); }
   parent() { return new Snapshot(this.tree, this.parts.slice(0, -1)); }
   hasChildren(keys) { return keys.every(key => this.child(key).exists()); }
+  isString() { return typeof this.val() === 'string'; }
 }
 
 function evaluate(expression, before, after, at, uid, campaignId = 'world', targetUid = uid) {
-  return Function('auth', 'root', 'data', 'newData', '$campaignId', '$uid', `return (${expression});`)(
+  expression = expression.replaceAll('newData.val().matches(', 'matches(newData.val(), ');
+  return Function('auth', 'root', 'data', 'newData', '$campaignId', '$uid', 'matches', `return (${expression});`)(
     uid ? { uid } : null, new Snapshot(before), new Snapshot(before).child(at),
-    new Snapshot(after).child(at), campaignId, targetUid
+    new Snapshot(after).child(at), campaignId, targetUid, (value, pattern) => pattern.test(value)
   );
 }
+
+test('avatar URLs are publicly readable only to signed-in users and writable only by their owner', () => {
+  const before = base();
+  const path = 'users/bob/avatarUrl';
+  const avatarRead = rules.users.$uid.avatarUrl['.read'];
+  assert.equal(evaluate(avatarRead, before, before, path, 'alice', 'world', 'bob'), true);
+  assert.equal(evaluate(avatarRead, before, before, path, null, 'world', 'bob'), false);
+  assert.equal(evaluate(rules.users.$uid['.write'], before, before, path, 'alice', 'world', 'bob'), false);
+  assert.equal(evaluate(rules.users.$uid['.write'], before, before, path, 'bob', 'world', 'bob'), true);
+});
+
+test('profile and roster avatar rules allow only this project Cloudinary image URLs', () => {
+  for (const expression of [
+    rules.users.$uid.avatarUrl['.validate'],
+    rules.campaigns.$campaignId.playerDirectory.$uid.avatarUrl['.validate']
+  ]) {
+    for (const [url, valid] of [
+      ['https://res.cloudinary.com/ehj3olxo/image/upload/v1/avatar.png', true],
+      ['javascript:alert(1)', false],
+      ['https://evil.example/avatar.png', false],
+      ['https://res.cloudinary.com/another/image/upload/avatar.png', false],
+      ['https://res.cloudinary.com/ehj3olxo/image/upload/' + 'a'.repeat(1000), false],
+      [42, false]
+    ]) {
+      assert.equal(evaluate(expression, {}, { photo: url }, 'photo', 'alice'), valid);
+    }
+  }
+});
 
 const base = () => ({
   users: { alice: { role: 'player' }, bob: { role: 'player' }, charlie: { role: 'player' } },

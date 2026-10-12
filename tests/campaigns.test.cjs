@@ -40,6 +40,10 @@ function app(mode = 'player', search = '', initialLanguage = null) {
   const storage = new Map(initialLanguage ? [['dnd-map-language', initialLanguage]] : []);
   const context = vm.createContext({
     console: { log() {}, warn() {}, error() {} }, URLSearchParams, crypto: webcrypto,
+    URL: class extends URL {
+      static createObjectURL() { return 'blob:test-avatar'; }
+      static revokeObjectURL() {}
+    },
     CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options?.detail; } },
     document: {
       documentElement: new Element(),
@@ -49,6 +53,8 @@ function app(mode = 'player', search = '', initialLanguage = null) {
       createElement: () => new Element()
     },
     window: {
+      AvatarCropper: { open: async file => file, cancel() {} },
+      CLOUDINARY_CONFIG: { cloudName: 'ehj3olxo', uploadPreset: 'test-only' },
       location: { search, pathname: mode === 'dm' ? '/dm.html' : '/index.html', hash: '', assign(url) { context.destination = url; } },
       history: { state: null, replaceState(state, title, url) {
         const parsed = new URL(url, 'http://127.0.0.1:8000');
@@ -209,8 +215,8 @@ test('membership revocation clears map, pending placement and listeners', () => 
 test('adding a player carries new campaign schema version', async () => {
   const a = app('dm');
   a.run('campaignMemberships = { mine: { role: "dm", name: "Mine", schemaVersion: 2 } }; activeCampaignId = "mine"; refreshCampaignPlayerManagement = async () => {};');
-  a.get('campaign-invite-player').value = 'bob';
-  await a.get('campaign-invite-form').events.submit({ preventDefault() {} });
+  a.run('managedCampaignId = "mine"; managedPlayers = [{ uid: "bob", username: "bob", displayName: "Bob", role: "" }];');
+  await a.get('campaign-invite-list').events.click({ target: { closest: () => ({ dataset: { invitePlayer: 'bob' } }) } });
   assert.equal(a.writes[0].ref, 'userCampaigns/bob/mine');
   assert.equal(a.writes[0].value.role, 'player');
   assert.equal(a.writes[0].value.schemaVersion, 2);
@@ -219,6 +225,9 @@ test('adding a player carries new campaign schema version', async () => {
 test('removing a player clears both membership and roster in one write', async () => {
   const a = app('dm');
   a.run('campaignMemberships = { mine: { role: "dm" } }; activeCampaignId = "mine"; refreshCampaignPlayerManagement = async () => {};');
+  a.run('managedCampaignId = "mine"; managedPlayers = [{ uid: "bob", username: "bob", displayName: "Bob", role: "player" }];');
+  const originalRef = a.context.database.ref;
+  a.context.database.ref = (ref = '') => ({ ...originalRef(ref), once: async () => ({ val: () => ({ role: 'player' }) }) });
   const button = { dataset: { removeCampaignMember: 'bob', memberUsername: 'bob' } };
   await a.get('campaign-member-list').events.click({ target: { closest: () => button } });
   assert.deepEqual(JSON.parse(JSON.stringify(a.writes[0].updates)), {
@@ -428,4 +437,224 @@ test('only explicitly tagged UI is translated, including dynamic text and access
   assert.equal(a.get('test-button').textContent, '保存图标');
   assert.equal(a.get('test-button').getAttribute('aria-label'), '打开Gate');
   assert.equal(a.get('unmarked-content').textContent, 'Save Changes');
+});
+
+test('avatars accept only the configured HTTPS image host and safe photo formats', () => {
+  const a = app();
+  const valid = 'https://res.cloudinary.com/ehj3olxo/image/upload/v1/avatar.png';
+  assert.equal(a.run(`safeAvatarUrl(${JSON.stringify(valid)})`), valid);
+  for (const url of ['javascript:alert(1)', 'https://evil.example/photo.png',
+    'https://res.cloudinary.com/another/image/upload/a.png', 'http://res.cloudinary.com/ehj3olxo/image/upload/a.png',
+    'https://evil@res.cloudinary.com/ehj3olxo/image/upload/a.png']) {
+    assert.equal(a.run(`safeAvatarUrl(${JSON.stringify(url)})`), '');
+  }
+  assert.equal(a.run('getAvatarValidationError({ name: "me.webp", type: "image/webp", size: 1024 })'), '');
+  for (const file of [
+    { name: 'me.svg', type: 'image/svg+xml', size: 100 },
+    { name: 'me.png', type: 'image/png', size: 3 * 1024 * 1024 },
+    { name: 'me.jpg', type: 'image/jpeg', size: 0 }
+  ]) assert.ok(a.run(`getAvatarValidationError(${JSON.stringify(file)})`));
+  const html = a.run('avatarMarkup("<script>", "javascript:alert(1)")');
+  assert.doesNotMatch(html, /<script|<img/);
+  assert.match(html, /&lt;/);
+});
+
+test('selected avatar is a local preview until Save, and language switching preserves it', async () => {
+  const a = app();
+  a.get('user-center-open').events.click();
+  a.get('profile-avatar-input').files = [{ name: 'me.png', type: 'image/png', size: 800 }];
+  await a.get('profile-avatar-input').events.change();
+  assert.equal(a.writes.length, 0);
+  assert.equal(a.run('avatarPreviewUrl'), 'blob:test-avatar');
+  a.run('window.I18n.setLanguage("zh")');
+  assert.equal(a.run('avatarDraft.file.name'), 'me.png');
+  a.get('user-center').events.close();
+  assert.equal(a.run('avatarDraft'), null);
+  assert.equal(a.run('avatarPreviewUrl'), '');
+});
+
+test('cancelling a crop preserves the existing unsaved avatar', async () => {
+  const a = app();
+  a.get('user-center-open').events.click();
+  a.run('avatarDraft = { file: { name: "previous.png" }, url: "" }; avatarPreviewUrl = "blob:previous";');
+  a.context.window.AvatarCropper.open = async () => null;
+  a.get('profile-avatar-input').files = [{ name: 'new.png', type: 'image/png', size: 800 }];
+  await a.get('profile-avatar-input').events.change();
+  assert.equal(a.run('avatarDraft.file.name'), 'previous.png');
+  assert.equal(a.run('avatarPreviewUrl'), 'blob:previous');
+  assert.equal(a.writes.length, 0);
+});
+
+test('closing the user center discards a pending crop result', async () => {
+  const a = app();
+  a.get('user-center-open').events.click();
+  let finish;
+  a.context.window.AvatarCropper.open = () => new Promise(resolve => { finish = resolve; });
+  a.get('profile-avatar-input').files = [{ name: 'new.png', type: 'image/png', size: 800 }];
+  const pending = a.get('profile-avatar-input').events.change();
+  a.get('user-center').close();
+  a.get('user-center').events.close();
+  finish({ name: 'avatar.png', type: 'image/png', size: 100 });
+  await pending;
+  assert.equal(a.run('avatarDraft'), null);
+  assert.equal(a.run('avatarPreviewUrl'), '');
+  assert.equal(a.writes.length, 0);
+});
+
+test('avatar upload and nickname are saved atomically to profile and every player roster', async () => {
+  const a = app();
+  a.run('avatarDraft = { file: { name: "me.png", type: "image/png", size: 20 }, url: "" }; uploadImageToCloudinary = async () => ({ path: "https://res.cloudinary.com/ehj3olxo/image/upload/v1/me.png" });');
+  const originalRef = a.context.database.ref;
+  a.context.database.ref = (ref = '') => ({ ...originalRef(ref),
+    once: async () => ({ val: () => ({ one: { role: 'player' }, own: { role: 'dm' } }) }) });
+  a.get('display-name-input').value = 'Hero';
+  await a.get('display-name-form').events.submit({ preventDefault() {} });
+  const update = a.writes[0].updates;
+  assert.equal(update['users/alice/avatarUrl'], 'https://res.cloudinary.com/ehj3olxo/image/upload/v1/me.png');
+  assert.equal(update['campaigns/one/playerDirectory/alice'].avatarUrl, update['users/alice/avatarUrl']);
+  assert.equal(update['users/alice/displayName'], 'Hero');
+  assert.equal(update['campaigns/own/playerDirectory/alice'], undefined);
+  assert.equal(a.run('avatarDraft'), null);
+  assert.equal(a.get('profile-avatar-input').disabled, false);
+});
+
+test('removing an avatar clears profile and roster photo without deleting the account', async () => {
+  const a = app();
+  a.run('currentUserProfile.avatarUrl = "https://res.cloudinary.com/ehj3olxo/image/upload/old.png";');
+  const originalRef = a.context.database.ref;
+  a.context.database.ref = (ref = '') => ({ ...originalRef(ref),
+    once: async () => ({ val: () => ({ one: { role: 'player' } }) }) });
+  a.get('display-name-input').value = 'Hero';
+  a.get('profile-avatar-remove').events.click();
+  await a.get('display-name-form').events.submit({ preventDefault() {} });
+  const update = a.writes[0].updates;
+  assert.equal(update['users/alice/avatarUrl'], null);
+  assert.equal(update['campaigns/one/playerDirectory/alice'].avatarUrl, undefined);
+  assert.equal(update['users/alice'], undefined);
+});
+
+test('failed profile save preserves uploaded avatar for retry without uploading twice', async () => {
+  const a = app();
+  a.run('avatarDraft = { file: { name: "me.png", type: "image/png", size: 20 }, url: "" }; let uploadCount = 0; uploadImageToCloudinary = async () => { uploadCount++; return { path: "https://res.cloudinary.com/ehj3olxo/image/upload/me.png" }; };');
+  const originalRef = a.context.database.ref;
+  a.context.database.ref = (ref = '') => ({ ...originalRef(ref), update: async () => { throw Error('offline'); } });
+  a.get('display-name-input').value = 'Hero';
+  await a.get('display-name-form').events.submit({ preventDefault() {} });
+  assert.equal(a.run('currentUserProfile.avatarUrl'), undefined);
+  assert.ok(a.run('avatarDraft.url'));
+  a.context.database.ref = originalRef;
+  await a.get('display-name-form').events.submit({ preventDefault() {} });
+  assert.equal(a.run('uploadCount'), 1);
+  assert.equal(a.writes.length, 1);
+});
+
+test('failed avatar upload does not save half of a profile', async () => {
+  const a = app();
+  a.run('avatarDraft = { file: { name: "me.png", type: "image/png", size: 20 }, url: "" }; uploadImageToCloudinary = async () => { throw Error("offline"); };');
+  a.get('display-name-input').value = 'Hero';
+  await a.get('display-name-form').events.submit({ preventDefault() {} });
+  assert.equal(a.writes.length, 0);
+  assert.equal(a.run('currentUserProfile.username'), 'alice');
+  assert.equal(a.get('display-name-status').dataset.state, 'error');
+  assert.equal(a.get('profile-avatar-input').disabled, false);
+});
+
+function managedApp() {
+  const a = app('dm');
+  a.run('campaignMemberships = { mine: { role: "dm", name: "Mine", schemaVersion: 2 } }; activeCampaignId = "mine"; managedCampaignId = "mine";');
+  return a;
+}
+
+test('player lists search by nickname and username, paginate, and clamp after removal', () => {
+  const a = managedApp();
+  a.run('managedPlayers = Array.from({ length: 15 }, (_, i) => ({ uid: "id" + i, username: "user" + i, displayName: i === 13 ? "月光旅人" : "Hero " + i, role: "player" })); renderPlayerManagement();');
+  assert.equal(a.run('getPlayerPage("member").items.length'), 6);
+  a.get('member-next').events.click();
+  assert.equal(a.run('getPlayerPage("member").page'), 2);
+  a.get('member-search').value = '@user13';
+  a.get('member-search').events.input();
+  assert.equal(a.run('getPlayerPage("member").items[0].displayName'), '月光旅人');
+  assert.equal(a.run('getPlayerPage("member").page'), 1);
+  a.get('member-search').value = '月光';
+  assert.equal(a.run('getPlayerPage("member").matches'), 1);
+  a.get('member-search').value = '';
+  a.run('playerPages.member = 3; managedPlayers = managedPlayers.slice(0, 6); renderPlayerManagement();');
+  assert.equal(a.run('playerPages.member'), 1);
+  assert.equal(a.get('member-next').disabled, true);
+});
+
+test('management reads directory once and separates members from available players', async () => {
+  const a = managedApp();
+  let directoryReads = 0;
+  const data = {
+    usernameDirectory: { bob: 'bob', charlie: 'charlie', alice: 'alice' },
+    'userCampaigns/alice/mine': { role: 'dm' }, 'userCampaigns/bob/mine': { role: 'player' },
+    'users/bob/displayName': 'Bob the Bard', 'users/charlie/displayName': 'Charlie'
+  };
+  a.context.database.ref = ref => ({ once: async () => {
+    if (ref === 'usernameDirectory') directoryReads++;
+    return { val: () => data[ref] ?? null };
+  } });
+  await a.run('refreshCampaignPlayerManagement()');
+  assert.equal(directoryReads, 1);
+  assert.equal(a.run('getPlayerPage("member").items[0].uid'), 'bob');
+  assert.equal(a.run('getPlayerPage("invite").items[0].uid'), 'charlie');
+  assert.equal(a.run('managedPlayers.length'), 2);
+  a.get('member-search').value = 'no match';
+  a.get('member-search').events.input();
+  assert.match(a.get('campaign-member-list').innerHTML, /No matching players/);
+});
+
+test('switching campaigns discards old member-loading responses', async () => {
+  const a = managedApp();
+  let resolve;
+  a.context.database.ref = () => ({ once: () => new Promise(done => { resolve = done; }) });
+  const pending = a.run('refreshCampaignPlayerManagement()');
+  a.run('activeCampaignId = "another"; playerManagementGeneration++; managedPlayers = [{ uid: "new" }];');
+  resolve({ val: () => ({ bob: 'bob' }) });
+  await pending;
+  assert.equal(a.run('managedPlayers[0].uid'), 'new');
+});
+
+test('returning from a different map hides the old party until the new campaign loads', async () => {
+  const a = managedApp();
+  a.run('campaignMemberships.another = { role: "dm", name: "Another" }; activeCampaignId = "another"; renderCampaignList();');
+  assert.equal(a.get('player-management').hidden, true);
+  a.run('let refreshedCampaign = ""; refreshCampaignPlayerManagement = async () => { refreshedCampaign = activeCampaignId; }; openCampaignPicker();');
+  assert.equal(a.run('refreshedCampaign'), 'another');
+});
+
+test('failed member loading gives a retry state without stale action buttons', async () => {
+  const a = managedApp();
+  a.context.database.ref = () => ({ once: async () => { throw Error('offline'); } });
+  await a.run('refreshCampaignPlayerManagement()');
+  assert.equal(a.run('playersLoadFailed'), true);
+  assert.equal(a.get('players-refresh').disabled, false);
+  assert.match(a.get('campaign-member-list').innerHTML, /Refresh Players/);
+});
+
+test('duplicate player actions are ignored and a changed DM membership is never removed', async () => {
+  const a = managedApp();
+  a.run('managedPlayers = [{ uid: "bob", username: "bob", displayName: "Bob", role: "player" }];');
+  let resolve;
+  a.context.database.ref = () => ({ once: () => new Promise(done => { resolve = done; }) });
+  const pending = a.run('changeCampaignPlayer("bob", true)');
+  await a.run('changeCampaignPlayer("bob", true)');
+  assert.equal(a.run('pendingPlayerActions.size'), 1);
+  a.run('refreshCampaignPlayerManagement = async () => {};');
+  resolve({ val: () => ({ role: 'dm' }) });
+  await pending;
+  assert.equal(a.writes.length, 0);
+  assert.equal(a.run('pendingPlayerActions.size'), 0);
+});
+
+test('language switching preserves player queries and escapes user-generated names', () => {
+  const a = managedApp();
+  a.run('managedPlayers = [{ uid: "bob", username: "bob", displayName: "<script>Bob</script>", role: "" }];');
+  a.get('invite-search').value = 'Bob';
+  a.run('window.I18n.setLanguage("zh");');
+  assert.equal(a.get('invite-search').value, 'Bob');
+  assert.match(a.get('campaign-invite-list').innerHTML, /&lt;script&gt;Bob/);
+  assert.doesNotMatch(a.get('campaign-invite-list').innerHTML, /<script>/);
+  assert.match(a.get('campaign-invite-list').innerHTML, /添加成员/);
 });

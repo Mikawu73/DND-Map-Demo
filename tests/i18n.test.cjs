@@ -29,6 +29,19 @@ test('literal JavaScript translation calls are covered by the dictionary', () =>
   }
 });
 
+test('crop status messages and script order are covered', () => {
+  const crop = read('assets/scripts/avatar-crop.js');
+  for (const [, literal] of crop.matchAll(/setStatus\(("(?:[^"\\]|\\.)*")/g)) {
+    const key = JSON.parse(literal);
+    if (key) assert.ok(messages[key], `Missing crop translation: ${key}`);
+  }
+  for (const page of ['index.html', 'dm.html']) {
+    const html = read(page);
+    assert.ok(html.indexOf('scripts/i18n.js') < html.indexOf('scripts/avatar-crop.js'));
+    assert.ok(html.indexOf('scripts/avatar-crop.js') < html.indexOf('scripts/main.js'));
+  }
+});
+
 test('English and Chinese templates contain matching variable placeholders', () => {
   const variables = value => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort();
   for (const [english, chinese] of Object.entries(messages)) {

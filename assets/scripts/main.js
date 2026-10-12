@@ -49,6 +49,11 @@ const userCenterOpen = document.getElementById("user-center-open");
 const userCenterClose = document.getElementById("user-center-close");
 const userCenterName = document.getElementById("user-center-name");
 const profileUsername = document.getElementById("profile-username");
+const profileAvatarInput = document.getElementById("profile-avatar-input");
+const profileAvatarChoose = document.getElementById("profile-avatar-choose");
+const profileAvatarPreview = document.getElementById("profile-avatar-preview");
+const profileAvatarRemove = document.getElementById("profile-avatar-remove");
+const userCenterAvatar = document.getElementById("user-center-avatar");
 const viewIntro = document.getElementById("view-intro");
 const mapTitle = document.getElementById("map-title");
 const appShell = document.getElementById("app-shell");
@@ -71,7 +76,10 @@ const campaignAdmin = document.getElementById("campaign-admin");
 const campaignCreateForm = document.getElementById("campaign-create-form");
 const campaignNameInput = document.getElementById("campaign-name");
 const campaignInviteForm = document.getElementById("campaign-invite-form");
-const campaignInvitePlayerSelect = document.getElementById("campaign-invite-player");
+const campaignInviteList = document.getElementById("campaign-invite-list");
+const playerManagement = document.getElementById("player-management");
+const playersStatus = document.getElementById("players-status");
+const playersRefresh = document.getElementById("players-refresh");
 const campaignMembers = document.getElementById("campaign-members");
 const campaignMemberList = document.getElementById("campaign-member-list");
 const campaignSwitchButton = document.getElementById("campaign-switch");
@@ -168,6 +176,17 @@ let campaignDeleteBusy = false;
 let campaignCreateBusy = false;
 let profileSaveBusy = false;
 let userProfileRef = null;
+let avatarDraft = null;
+let avatarPreviewUrl = "";
+let avatarSelectionGeneration = 0;
+let playerManagementGeneration = 0;
+let managedPlayers = [];
+let managedCampaignId = "";
+let playersLoading = false;
+let playersLoadFailed = false;
+const playerPages = { member: 1, invite: 1 };
+const pendingPlayerActions = new Set();
+const PLAYER_PAGE_SIZE = 6;
 const customMarkers = {};
 const markerIconAssignments = {};
 
@@ -431,6 +450,124 @@ async function loadDisplayName(uid, fallback) {
   }
 }
 
+function safeAvatarUrl(value) {
+  if (typeof value !== "string" || value.length > 1000) return "";
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "res.cloudinary.com" &&
+      !url.username && !url.password && url.pathname.startsWith(`/${CLOUDINARY_CLOUD_NAME}/image/upload/`)
+      ? url.href : "";
+  } catch { return ""; }
+}
+
+async function loadAvatarUrl(uid) {
+  try {
+    return safeAvatarUrl((await firebaseDatabase.ref(`${USERS_PATH}/${uid}/avatarUrl`).once("value")).val());
+  } catch { return ""; } // Older rules and accounts still render initials.
+}
+
+function avatarInitials(name) {
+  const words = String(name || "?").trim().split(/\s+/);
+  return (words.length > 1 ? Array.from(words[0])[0] + Array.from(words[words.length - 1])[0]
+    : Array.from(words[0]).slice(0, 2).join("")).toUpperCase();
+}
+
+function avatarMarkup(name, url) {
+  const safeUrl = safeAvatarUrl(url);
+  return `<span class="user-avatar" aria-hidden="true">${escapeHtml(avatarInitials(name))}${safeUrl
+    ? `<img src="${escapeHtml(safeUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}</span>`;
+}
+
+function bindAvatarFallbacks(root) {
+  root?.querySelectorAll(".user-avatar img").forEach(image => {
+    image.addEventListener("error", () => { image.hidden = true; }, { once: true });
+  });
+}
+
+function renderAvatar(element, name, url, localPreview = false) {
+  if (!element) return;
+  element.textContent = avatarInitials(name);
+  const src = localPreview ? avatarPreviewUrl : safeAvatarUrl(url);
+  if (!src) return;
+  const image = document.createElement("img");
+  image.src = src;
+  image.alt = "";
+  image.referrerPolicy = "no-referrer";
+  image.addEventListener("error", () => { image.hidden = true; }, { once: true });
+  element.append(image);
+}
+
+function clearAvatarPreview() {
+  if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+  avatarPreviewUrl = "";
+}
+
+function resetAvatarDraft() {
+  avatarSelectionGeneration++;
+  window.AvatarCropper?.cancel();
+  clearAvatarPreview();
+  avatarDraft = null;
+  if (profileAvatarInput) profileAvatarInput.value = "";
+}
+
+function renderProfileAvatar() {
+  renderAvatar(profileAvatarPreview, displayNameInput?.value || getDisplayName(),
+    avatarDraft === null ? currentUserProfile?.avatarUrl : avatarDraft.url, !!avatarPreviewUrl);
+  if (profileAvatarRemove) profileAvatarRemove.disabled = profileSaveBusy ||
+    !(avatarDraft === null ? safeAvatarUrl(currentUserProfile?.avatarUrl) : avatarDraft.file || avatarDraft.url);
+}
+
+function getAvatarValidationError(file) {
+  if (!file || !["image/jpeg", "image/png", "image/webp"].includes(file.type) ||
+      !/\.(jpe?g|png|webp)$/i.test(file.name)) return "Choose a JPG, PNG or WebP photo.";
+  if (!file.size || file.size > 2 * 1024 * 1024) return "Your profile photo must be smaller than 2 MB.";
+  return "";
+}
+
+profileAvatarChoose?.addEventListener("click", () => {
+  if (!profileSaveBusy) profileAvatarInput?.click();
+});
+profileAvatarInput?.addEventListener("change", async () => {
+  if (profileSaveBusy) return;
+  const file = profileAvatarInput.files?.[0];
+  profileAvatarInput.value = "";
+  if (!file) return;
+  const error = getAvatarValidationError(file);
+  if (error) {
+    profileAvatarInput.value = "";
+    setDisplayNameStatus(t(error), "error");
+    return;
+  }
+  const generation = ++avatarSelectionGeneration;
+  const uid = currentUser?.uid;
+  try {
+    const croppedFile = await window.AvatarCropper.open(file);
+    if (!croppedFile || generation !== avatarSelectionGeneration || currentUser?.uid !== uid || !userCenter.open) return;
+    clearAvatarPreview();
+    avatarDraft = { file: croppedFile, url: "" };
+    avatarPreviewUrl = URL.createObjectURL(croppedFile);
+    renderProfileAvatar();
+    setDisplayNameStatus(t("Photo ready. Save Changes to apply."), "info");
+  } catch (error) {
+    if (generation !== avatarSelectionGeneration) return;
+    window.AvatarCropper?.cancel();
+    setDisplayNameStatus(t("This photo could not be opened. Try another image."), "error");
+  }
+});
+
+profileAvatarRemove?.addEventListener("click", () => {
+  if (profileSaveBusy) return;
+  clearAvatarPreview();
+  avatarDraft = { file: null, url: "" };
+  profileAvatarInput.value = "";
+  renderProfileAvatar();
+  setDisplayNameStatus(t("Photo removed from preview. Save Changes to apply."), "info");
+});
+
+displayNameInput?.addEventListener("input", renderProfileAvatar);
+userCenter?.addEventListener("close", () => { if (!profileSaveBusy) resetAvatarDraft(); });
+userCenter?.addEventListener("cancel", event => { if (profileSaveBusy) event.preventDefault(); });
+
 function startUserProfileSync() {
   userProfileRef?.off();
   const uid = currentUser?.uid;
@@ -448,11 +585,13 @@ userCenterOpen?.addEventListener("click", () => {
   displayNameInput.value = getDisplayName();
   displayNameVisibleInput.checked = currentUserProfile.showInPlayerList !== false;
   profileUsername.value = currentUserProfile.username || "";
+  if (!profileSaveBusy) resetAvatarDraft();
+  renderProfileAvatar();
   setDisplayNameStatus("", "info");
   userCenter.showModal();
 });
 
-userCenterClose?.addEventListener("click", () => userCenter.close());
+userCenterClose?.addEventListener("click", () => { if (!profileSaveBusy) userCenter.close(); });
 
 function escapeHtml(value) {
   return String(value || "")
@@ -1182,13 +1321,17 @@ function renderPresenceList(entries) {
 
   presenceList.innerHTML = visiblePlayers.map(([, entry]) => `
     <article class="presence-item">
-      <div>
+      <div class="player-identity">
+        ${avatarMarkup(entry.displayName || entry.username, entry.avatarUrl)}
+        <div>
         <p class="presence-item__name">${escapeHtml(entry.displayName || entry.username || t("Unknown player"))}</p>
         <p class="presence-item__meta" data-i18n="Registered player">${t("Registered player")}</p>
+        </div>
       </div>
       <p class="presence-item__meta" data-i18n="${entry.lastUpdated ? "Listed" : "Ready"}">${entry.lastUpdated ? t("Listed") : t("Ready")}</p>
     </article>
   `).join("");
+  bindAvatarFallbacks(presenceList);
 }
 
 function stopPresenceSync() {
@@ -1242,6 +1385,7 @@ async function syncCurrentPlayerDirectoryProfile() {
   await currentPlayerDirectoryRef.update({
     username: currentUserProfile.username || "",
     displayName: getDisplayName(),
+    ...(safeAvatarUrl(currentUserProfile.avatarUrl) ? { avatarUrl: safeAvatarUrl(currentUserProfile.avatarUrl) } : {}),
     role: "player",
     showInPlayerList: currentUserProfile.showInPlayerList !== false,
     lastUpdated: window.firebase.database.ServerValue.TIMESTAMP
@@ -1566,6 +1710,7 @@ function renderCampaignList() {
   if (campaignAdmin) {
     campaignAdmin.hidden = viewMode !== "dm";
   }
+  if (playerManagement) playerManagement.hidden = !canManageCampaign() || managedCampaignId !== getCurrentCampaignId();
   if (campaignInviteForm) {
     campaignInviteForm.hidden = !canManageCampaign();
   }
@@ -1670,120 +1815,135 @@ async function deleteCampaign(campaignId, deleteButton) {
   }
 }
 
-async function loadInvitePlayerOptions() {
-  if (!firebaseDatabase || !campaignInvitePlayerSelect || !canManageCampaign()) {
-    return;
-  }
-
-  campaignInvitePlayerSelect.disabled = true;
-  const campaignId = getCurrentCampaignId();
-  campaignInvitePlayerSelect.innerHTML = `<option value="" data-i18n="Loading players...">${t("Loading players...")}</option>`;
-
-  try {
-    const playersSnapshot = await firebaseDatabase.ref(USERNAME_DIRECTORY_PATH).once("value");
-    const players = playersSnapshot.val();
-    const availablePlayers = [];
-
-    for (const [username, uid] of Object.entries(players && typeof players === "object" ? players : {})) {
-      if (uid === currentUser.uid) {
-        continue;
-      }
-      const membershipSnapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${campaignId}`).once("value");
-      if (!membershipSnapshot.exists()) {
-        availablePlayers.push({
-          uid,
-          username,
-          displayName: await loadDisplayName(uid, username)
-        });
-      }
-    }
-
-    if (campaignId !== getCurrentCampaignId() || !isCampaignDm()) return;
-    availablePlayers.sort((a, b) => a.displayName.localeCompare(b.displayName));
-    campaignInvitePlayerSelect.innerHTML = `<option value="" data-i18n="Select a player">${t("Select a player")}</option>`;
-
-    for (const player of availablePlayers) {
-      const option = document.createElement("option");
-      option.value = player.uid;
-      option.dataset.username = player.username;
-      option.dataset.displayName = player.displayName;
-      option.textContent = player.displayName;
-      window.I18n.setAttribute(option, "title", "Sign-in username: {name}", { name: player.username });
-      campaignInvitePlayerSelect.append(option);
-    }
-
-    if (availablePlayers.length === 0) {
-      campaignInvitePlayerSelect.innerHTML = `<option value="" data-i18n="All existing players are already members">${t("All existing players are already members")}</option>`;
-    }
-  } catch (error) {
-    console.error("Unable to load players for invitation.", error);
-    if (campaignId === getCurrentCampaignId()) {
-      campaignInvitePlayerSelect.innerHTML = `<option value="" data-i18n="Player list could not be loaded">${t("Player list could not be loaded")}</option>`;
-    }
-  } finally {
-    if (campaignId === getCurrentCampaignId()) campaignInvitePlayerSelect.disabled = false;
-  }
+function setPlayersStatus(key, type = "info", values = {}) {
+  if (!playersStatus) return;
+  playersStatus.hidden = !key;
+  playersStatus.dataset.state = type;
+  setUiText(playersStatus, key, values);
 }
 
-async function loadCampaignMemberList() {
-  if (!firebaseDatabase || !campaignMembers || !campaignMemberList || !canManageCampaign()) {
-    return;
+function getPlayerPage(kind) {
+  const search = String(document.getElementById(kind + "-search")?.value || "").trim().replace(/^@/, "").toLocaleLowerCase();
+  const candidates = managedPlayers.filter(player => kind === "member" ? player.role === "player" : !player.role);
+  const filtered = candidates.filter(player =>
+    player.displayName.toLocaleLowerCase().includes(search) || player.username.toLocaleLowerCase().includes(search));
+  filtered.sort((a, b) => a.displayName.localeCompare(b.displayName) || a.username.localeCompare(b.username));
+  const pages = Math.max(1, Math.ceil(filtered.length / PLAYER_PAGE_SIZE));
+  const page = Math.min(Math.max(1, playerPages[kind]), pages);
+  return { items: filtered.slice((page - 1) * PLAYER_PAGE_SIZE, page * PLAYER_PAGE_SIZE),
+    page, pages, total: candidates.length, matches: filtered.length, search };
+}
+
+function renderPlayerManagement() {
+  if (!canManageCampaign() || managedCampaignId !== getCurrentCampaignId()) return;
+  if (playerManagement) playerManagement.hidden = false;
+  if (campaignMembers) campaignMembers.hidden = false;
+  for (const kind of ["member", "invite"]) {
+    const list = kind === "member" ? campaignMemberList : campaignInviteList;
+    if (!list) continue;
+    const page = getPlayerPage(kind);
+    playerPages[kind] = page.page;
+    setUiText(document.getElementById(kind + "-count"), "Players · {count}", { count: page.total });
+    setUiText(document.getElementById(kind + "-page"), "{count} results · {page} / {pages}",
+      { count: page.matches, page: page.page, pages: page.pages });
+    document.getElementById(kind + "-prev").disabled = playersLoading || page.page <= 1;
+    document.getElementById(kind + "-next").disabled = playersLoading || page.page >= page.pages;
+    list.setAttribute("aria-busy", String(playersLoading));
+    if (playersLoading || playersLoadFailed || page.items.length === 0) {
+      const key = playersLoading ? "Loading players..." : playersLoadFailed ? "Could not load players. Use Refresh Players to try again."
+        : page.search ? "No matching players. Try another name."
+        : kind === "member" ? "Your party is empty. Add a player from Find Players."
+        : "All registered players are already in this campaign.";
+      list.innerHTML = '<p class="player-empty" data-i18n="' + key + '">' + t(key) + "</p>";
+      continue;
+    }
+    list.innerHTML = page.items.map(player => {
+      const busy = pendingPlayerActions.has(managedCampaignId + ":" + player.uid);
+      const action = kind === "member" ? "Remove" : "Add to Party";
+      const attribute = kind === "member" ? "data-remove-campaign-member" : "data-invite-player";
+      return '<article class="campaign-member"><div class="player-identity">' +
+        avatarMarkup(player.displayName, player.avatarUrl) +
+        '<div class="player-identity__copy"><strong>' + escapeHtml(player.displayName) +
+        '</strong><small>@' + escapeHtml(player.username) + '</small></div></div>' +
+        '<button type="button" class="auth-button ' + (kind === "member" ? "campaign-member__remove" : "") +
+        '" ' + attribute + '="' + escapeHtml(player.uid) + '" data-member-username="' + escapeHtml(player.displayName) +
+        '" aria-label="' + escapeHtml(t(kind === "member" ? "Remove {name}" : "Add {name} to party", { name: player.displayName })) +
+        '"' + (busy ? " disabled" : "") + '>' + t(busy ? "Saving…" : action) + '</button></article>';
+    }).join("");
+    bindAvatarFallbacks(list);
   }
-
-  campaignMembers.hidden = false;
-  const campaignId = getCurrentCampaignId();
-  campaignMemberList.innerHTML = `<p class="location-panel__status" data-i18n="Loading current players...">${t("Loading current players...")}</p>`;
-
-  try {
-    const usernamesSnapshot = await firebaseDatabase.ref(USERNAME_DIRECTORY_PATH).once("value");
-    const usernames = usernamesSnapshot.val();
-    const usernameByUid = {};
-    for (const [username, uid] of Object.entries(usernames && typeof usernames === "object" ? usernames : {})) {
-      usernameByUid[uid] = username;
-    }
-
-    const members = [];
-    for (const [uid, username] of Object.entries(usernameByUid)) {
-      const membershipSnapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}/${campaignId}`).once("value");
-      const membership = membershipSnapshot.val();
-      if (membership?.role === "player") {
-        members.push({ uid, username, displayName: await loadDisplayName(uid, username) });
-      }
-    }
-
-    if (campaignId !== getCurrentCampaignId() || !isCampaignDm()) return;
-    members.sort((a, b) => a.displayName.localeCompare(b.displayName));
-    campaignMemberList.innerHTML = "";
-
-    if (members.length === 0) {
-      campaignMemberList.innerHTML = `<p class="location-panel__status" data-i18n="No players are currently in this campaign.">${t("No players are currently in this campaign.")}</p>`;
-      return;
-    }
-
-    for (const member of members) {
-      const item = document.createElement("article");
-      item.className = "campaign-member";
-      item.innerHTML = `
-        <strong title="${escapeHtml(t('Sign-in username: {name}', { name: member.username }))}">${escapeHtml(member.displayName)}</strong>
-        <button type="button" class="auth-button campaign-member__remove" data-remove-campaign-member="${escapeHtml(member.uid)}" data-member-username="${escapeHtml(member.displayName)}" data-i18n="Remove">${t("Remove")}</button>
-      `;
-      window.I18n.setAttribute(item.querySelector("strong"), "title", "Sign-in username: {name}", { name: member.username });
-      campaignMemberList.append(item);
-    }
-  } catch (error) {
-    console.error("Unable to load campaign members.", error);
-    if (campaignId === getCurrentCampaignId()) {
-      campaignMemberList.innerHTML = `<p class="location-panel__status" data-i18n="Current players could not be loaded.">${t("Current players could not be loaded.")}</p>`;
-    }
-  }
+  if (playersRefresh) playersRefresh.disabled = playersLoading || pendingPlayerActions.size > 0;
 }
 
 async function refreshCampaignPlayerManagement() {
-  await Promise.all([
-    loadInvitePlayerOptions(),
-    loadCampaignMemberList()
-  ]);
+  if (!firebaseDatabase || !canManageCampaign()) return;
+  const campaignId = getCurrentCampaignId();
+  const actor = currentUser.uid;
+  const generation = ++playerManagementGeneration;
+  const isCurrent = () => generation === playerManagementGeneration &&
+    campaignId === getCurrentCampaignId() && currentUser?.uid === actor && canManageCampaign();
+  if (managedCampaignId !== campaignId) {
+    managedPlayers = [];
+    playerPages.member = playerPages.invite = 1;
+    for (const kind of ["member", "invite"]) {
+      const input = document.getElementById(kind + "-search");
+      if (input) input.value = "";
+    }
+  }
+  managedCampaignId = campaignId;
+  playersLoading = true;
+  playersLoadFailed = false;
+  setPlayersStatus("");
+  renderPlayerManagement();
+  try {
+    // Read the directory once. Bounded workers avoid serial N+1 reads and unbounded requests.
+    const snapshot = await firebaseDatabase.ref(USERNAME_DIRECTORY_PATH).once("value");
+    const directory = snapshot.val() || {};
+    const entries = Object.entries(directory).filter(([, uid]) => typeof uid === "string" && uid);
+    const result = [];
+    let nextIndex = 0;
+    await Promise.all(Array.from({ length: Math.min(8, entries.length) }, async () => {
+      while (isCurrent() && nextIndex < entries.length) {
+        const [username, uid] = entries[nextIndex++];
+        const membership = (await firebaseDatabase.ref(
+          USER_CAMPAIGNS_PATH + "/" + uid + "/" + campaignId).once("value")).val();
+        if (membership?.role === "dm") continue;
+        const [displayName, avatarUrl] = await Promise.all([loadDisplayName(uid, username), loadAvatarUrl(uid)]);
+        result.push({ uid, username, displayName, avatarUrl, role: membership?.role || "" });
+      }
+    }));
+    if (!isCurrent()) return;
+    managedPlayers = result;
+  } catch (error) {
+    if (!isCurrent()) return;
+    console.warn("Unable to load campaign players.", error);
+    managedPlayers = [];
+    playersLoadFailed = true;
+    setPlayersStatus("Could not load players. Use Refresh Players to try again.", "error");
+  } finally {
+    if (isCurrent()) {
+      playersLoading = false;
+      renderPlayerManagement();
+    }
+  }
 }
+
+for (const kind of ["member", "invite"]) {
+  document.getElementById(kind + "-search")?.addEventListener("input", () => {
+    playerPages[kind] = 1;
+    renderPlayerManagement();
+  });
+  for (const [direction, increment] of [["prev", -1], ["next", 1]]) {
+    document.getElementById(kind + "-" + direction)?.addEventListener("click", () => {
+      playerPages[kind] += increment;
+      renderPlayerManagement();
+    });
+  }
+}
+playersRefresh?.addEventListener("click", () => {
+  if (!pendingPlayerActions.size) return refreshCampaignPlayerManagement();
+});
+campaignInviteForm?.addEventListener("submit", event => event.preventDefault());
 
 function selectCampaign(campaignId, openMap = true) {
   if (!openMap && !canManageCampaign(campaignId)) return;
@@ -1795,6 +1955,7 @@ function selectCampaign(campaignId, openMap = true) {
   stopFirebaseSync();
   stopPresenceSync();
   activeCampaignId = campaignId;
+  playerManagementGeneration++;
   campaignPickerOpen = !openMap;
   syncCampaignUrl(openMap ? campaignId : "");
   campaignRootMap = null;
@@ -1824,6 +1985,7 @@ function openCampaignPicker() {
   updateAuthCopy();
   renderCampaignList();
   updateAppVisibility();
+  if (canManageCampaign()) refreshCampaignPlayerManagement();
 }
 
 function updateAuthCopy() {
@@ -1861,6 +2023,8 @@ function updateAuthCopy() {
 function updateSessionPanel() {
   if (userCenterOpen) userCenterOpen.hidden = !currentUser || !currentUserProfile;
   if (userCenterName) userCenterName.textContent = currentUser ? getDisplayName() : "";
+  renderAvatar(userCenterAvatar, currentUser ? getDisplayName() : "", currentUserProfile?.avatarUrl);
+  if (userCenter?.open && avatarDraft === null) renderProfileAvatar();
   if (!currentUser && userCenter?.open) userCenter.close();
   if (!sessionPanel || !sessionSummary) {
     return;
@@ -2719,59 +2883,61 @@ rootMapForm?.addEventListener("submit", async (event) => {
   }
 });
 
-campaignInviteForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const invitedUid = campaignInvitePlayerSelect?.value || "";
-  const selectedOption = campaignInvitePlayerSelect?.selectedOptions?.[0];
-  const username = selectedOption?.dataset.displayName || selectedOption?.dataset.username || t("Selected player");
-  const membership = campaignMemberships[getCurrentCampaignId()];
-
-  if (!firebaseDatabase || !currentUser || !canManageCampaign() || !invitedUid || !membership) {
-    setAuthMessage(t("Select a player and a campaign you manage."), "error");
-    return;
-  }
-
+async function changeCampaignPlayer(uid, remove = false) {
+  const campaignId = getCurrentCampaignId();
+  const actor = currentUser?.uid;
+  const membership = campaignMemberships[campaignId];
+  const player = managedCampaignId === campaignId ? managedPlayers.find(item => item.uid === uid) : null;
+  const actionKey = campaignId + ":" + uid;
+  if (!firebaseDatabase || !actor || !canManageCampaign() || !player || playersLoading ||
+      pendingPlayerActions.has(actionKey) || (remove ? player.role !== "player" : !!player.role)) return;
+  if (remove && !window.confirm(t("Remove {name} from this campaign?", { name: player.displayName }))) return;
+  pendingPlayerActions.add(actionKey);
+  renderPlayerManagement();
+  const isCurrent = () => currentUser?.uid === actor && getCurrentCampaignId() === campaignId && canManageCampaign();
   try {
-    await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${invitedUid}/${getCurrentCampaignId()}`).set({
-      name: membership.name || getCurrentCampaignId(),
-      role: "player",
-      joinedAt: new Date().toISOString(),
-      ...(membership.schemaVersion === 2 ? { schemaVersion: 2 } : {})
-    });
-    await refreshCampaignPlayerManagement();
-    setAuthMessage("{name} can now see {campaign}.", "success", { name: username, campaign: membership.name || t("this campaign") });
+    const membershipRef = firebaseDatabase.ref(USER_CAMPAIGNS_PATH + "/" + uid + "/" + campaignId);
+    // Recheck before writing: another DM tab may already have changed this membership.
+    const latest = (await membershipRef.once("value")).val();
+    if (!isCurrent()) return;
+    if (remove ? latest?.role !== "player" : !!latest) {
+      await refreshCampaignPlayerManagement();
+      if (isCurrent()) setPlayersStatus("This player's membership changed. The list has been refreshed.", "info");
+      return;
+    }
+    if (remove) {
+      await firebaseDatabase.ref().update({
+        [USER_CAMPAIGNS_PATH + "/" + uid + "/" + campaignId]: null,
+        ["campaigns/" + campaignId + "/playerDirectory/" + uid]: null
+      });
+    } else {
+      await membershipRef.set({
+        name: membership.name || campaignId, role: "player", joinedAt: new Date().toISOString(),
+        ...(membership.schemaVersion === 2 ? { schemaVersion: 2 } : {})
+      });
+    }
+    if (!isCurrent()) return;
+    const listedPlayer = managedPlayers.find(item => item.uid === uid);
+    if (listedPlayer) listedPlayer.role = remove ? "" : "player";
+    setPlayersStatus(remove ? "{name} was removed from this campaign." : "{name} can now see {campaign}.", "success",
+      { name: player.displayName, campaign: membership.name || campaignId });
   } catch (error) {
-    console.error("Unable to invite player.", error);
-    setAuthMessage(t("Player could not be added. Check the username and Firebase rules."), "error");
+    console.warn("Unable to update campaign player.", error);
+    if (isCurrent()) setPlayersStatus(remove ? "Player could not be removed. Check your Firebase rules."
+      : "Player could not be added. Check the username and Firebase rules.", "error");
+  } finally {
+    pendingPlayerActions.delete(actionKey);
+    if (isCurrent()) renderPlayerManagement();
   }
+}
+
+campaignInviteList?.addEventListener("click", event => {
+  const button = event.target.closest("[data-invite-player]");
+  if (button) return changeCampaignPlayer(button.dataset.invitePlayer);
 });
-
-campaignMemberList?.addEventListener("click", async (event) => {
-  const removeButton = event.target.closest("[data-remove-campaign-member]");
-  if (!removeButton || !firebaseDatabase || !canManageCampaign()) {
-    return;
-  }
-
-  const uid = removeButton.dataset.removeCampaignMember;
-  const username = removeButton.dataset.memberUsername || t("this player");
-  const shouldRemove = window.confirm(t("Remove {name} from this campaign?", { name: username }));
-  if (!shouldRemove) {
-    return;
-  }
-
-  removeButton.disabled = true;
-  try {
-    await firebaseDatabase.ref().update({
-      [`${USER_CAMPAIGNS_PATH}/${uid}/${getCurrentCampaignId()}`]: null,
-      [`${getCampaignPath("playerDirectory")}/${uid}`]: null
-    });
-    await refreshCampaignPlayerManagement();
-    setAuthMessage("{name} was removed from this campaign.", "success", { name: username });
-  } catch (error) {
-    console.error("Unable to remove campaign member.", error);
-    removeButton.disabled = false;
-    setAuthMessage(t("Player could not be removed. Check your Firebase rules."), "error");
-  }
+campaignMemberList?.addEventListener("click", event => {
+  const button = event.target.closest("[data-remove-campaign-member]");
+  if (button) return changeCampaignPlayer(button.dataset.removeCampaignMember, true);
 });
 
 async function signInWithUsername(username, password) {
@@ -2901,6 +3067,9 @@ displayNameForm?.addEventListener("submit", async (event) => {
   profileSaveBusy = true;
   const uid = currentUser.uid;
   const profile = currentUserProfile;
+  const draft = avatarDraft;
+  const profileControls = [displayNameInput, displayNameVisibleInput, profileAvatarInput, profileAvatarChoose, profileAvatarRemove, userCenterClose];
+  profileControls.forEach(control => { if (control) control.disabled = true; });
   if (displayNameSaveButton) {
     displayNameSaveButton.disabled = true;
   }
@@ -2908,6 +3077,16 @@ displayNameForm?.addEventListener("submit", async (event) => {
   try {
     const showInPlayerList = displayNameVisibleInput?.checked ?? true;
     setDisplayNameStatus(t("Saving…"), "info");
+    if (draft?.file && !draft.url) {
+      const validationError = getAvatarValidationError(draft.file);
+      if (validationError) throw new Error(validationError);
+      setDisplayNameStatus(t("Uploading profile photo…"), "info");
+      const upload = await uploadImageToCloudinary(draft.file);
+      if (currentUser?.uid !== uid) return;
+      draft.url = safeAvatarUrl(upload.path);
+      if (!draft.url) throw new Error("Cloudinary returned an unexpected image URL.");
+    }
+    const avatarUrl = draft === null ? safeAvatarUrl(profile.avatarUrl) : draft.url;
     // Refresh memberships so a removed campaign cannot block unrelated profile edits.
     const snapshot = await firebaseDatabase.ref(`${USER_CAMPAIGNS_PATH}/${uid}`).once("value");
     const memberships = snapshot.val() || {};
@@ -2915,11 +3094,13 @@ displayNameForm?.addEventListener("submit", async (event) => {
       [`${USERS_PATH}/${uid}/displayName`]: nextDisplayName,
       [`${USERS_PATH}/${uid}/showInPlayerList`]: showInPlayerList
     };
+    if (draft !== null) updates[`${USERS_PATH}/${uid}/avatarUrl`] = avatarUrl || null;
     for (const [campaignId, membership] of Object.entries(memberships)) {
       if (membership?.role !== "player") continue;
       updates[`campaigns/${campaignId}/playerDirectory/${uid}`] = {
         username: profile.username,
         displayName: nextDisplayName,
+        ...(avatarUrl ? { avatarUrl } : {}),
         role: "player",
         showInPlayerList,
         lastUpdated: Date.now()
@@ -2932,16 +3113,21 @@ displayNameForm?.addEventListener("submit", async (event) => {
     currentUserProfile = {
       ...currentUserProfile,
       displayName: nextDisplayName,
-      showInPlayerList
+      showInPlayerList,
+      avatarUrl
     };
 
+    resetAvatarDraft();
     updateSessionPanel();
-    setDisplayNameStatus(t("Saved. Your party will see your new name."), "success");
+    renderProfileAvatar();
+    setDisplayNameStatus(t("Profile saved. Your party will see your updated details."), "success");
   } catch (error) {
     console.error("Unable to update display name.", error);
     if (currentUser?.uid === uid) setDisplayNameStatus(t("Could not save. Check your connection and try again."), "error");
   } finally {
     profileSaveBusy = false;
+    profileControls.forEach(control => { if (control) control.disabled = false; });
+    renderProfileAvatar();
     if (displayNameSaveButton) {
       displayNameSaveButton.disabled = false;
     }
@@ -2949,6 +3135,10 @@ displayNameForm?.addEventListener("submit", async (event) => {
 });
 
 async function handleAuthStateChanged(user) {
+  playerManagementGeneration++;
+  managedPlayers = [];
+  managedCampaignId = "";
+  resetAvatarDraft();
   userProfileRef?.off();
   userProfileRef = null;
   currentUser = user;
@@ -3038,6 +3228,7 @@ window.addEventListener("languagechange", () => {
   renderMapLegend();
   renderCampaignList();
   updateMapHeader();
+  renderPlayerManagement();
   if (viewMode === "dm" && canAccessCurrentView() && !campaignPickerOpen) renderDmControls();
   const editor = locationPanelBody?.querySelector(".marker-icon-editor");
   if (editor) {

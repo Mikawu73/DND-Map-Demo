@@ -4,19 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n="DND Map · DM">DND Map · DM</title>
-  <link rel="stylesheet" href="assets/styles/main.css?v=20261011-1">
+  <link rel="stylesheet" href="assets/styles/main.css?v=20261012-2">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
   <script src="assets/scripts/firebase-config.js?v=20260927-1"></script>
-  <script src="assets/scripts/i18n.js?v=20261011-1" defer></script>
-  <script src="assets/scripts/main.js?v=20261011-1" defer></script>
+  <script src="assets/scripts/i18n.js?v=20261012-2" defer></script>
+  <script src="assets/scripts/avatar-crop.js?v=20261012-2" defer></script>
+  <script src="assets/scripts/main.js?v=20261012-2" defer></script>
 </head>
 <body data-view="dm">
   <main class="page">
     <div class="account-bar">
       <button type="button" id="language-toggle" class="auth-button language-toggle" aria-label="Switch to Chinese">中文</button>
       <button type="button" id="user-center-open" class="auth-button account-button" aria-haspopup="dialog" aria-controls="user-center" hidden>
+        <span id="user-center-avatar" class="user-avatar user-avatar--small" aria-hidden="true"></span>
         <span id="user-center-name" class="account-button__name"></span><span data-i18n="User Center">User Center</span>
       </button>
     </div>
@@ -27,6 +29,18 @@
       </div>
       <p class="user-center__intro" data-i18n="Let your party know what to call you.">Let your party know what to call you.</p>
       <form id="display-name-form" class="user-center__form">
+        <div class="profile-avatar-editor">
+          <span id="profile-avatar-preview" class="user-avatar user-avatar--large" aria-hidden="true"></span>
+          <div class="profile-avatar-editor__controls">
+            <div class="auth-form__field">
+              <span data-i18n="Profile Photo">Profile Photo</span>
+              <input id="profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <button type="button" id="profile-avatar-choose" class="auth-button" aria-describedby="profile-avatar-help" data-i18n="Choose Photo">Choose Photo</button>
+            </div>
+            <button type="button" id="profile-avatar-remove" class="profile-avatar-remove" data-i18n="Remove Photo">Remove Photo</button>
+          </div>
+        </div>
+        <p id="profile-avatar-help" class="user-center__hint" data-i18n="JPG, PNG or WebP · up to 2 MB. Photos are shown in a circle. Save Changes to apply.">JPG, PNG or WebP · up to 2 MB. Photos are shown in a circle. Save Changes to apply.</p>
         <label class="auth-form__field">
           <span data-i18n="Display Name">Display Name</span>
           <input id="display-name-input" type="text" minlength="1" maxlength="24" required autocomplete="nickname" aria-describedby="display-name-help">
@@ -44,6 +58,28 @@
         <p id="display-name-status" class="display-name-status" role="status" aria-live="polite" hidden></p>
         <button type="submit" id="display-name-save" class="auth-button auth-button--primary" data-i18n="Save Changes">Save Changes</button>
       </form>
+    </dialog>
+    <dialog id="avatar-crop-dialog" class="user-center avatar-crop" aria-labelledby="avatar-crop-title" aria-describedby="avatar-crop-help">
+      <h2 id="avatar-crop-title" data-i18n="Crop Your Photo">Crop Your Photo</h2>
+      <p id="avatar-crop-help" data-i18n="Drag the photo to position it, then zoom to frame your avatar. You can also use the arrow keys.">Drag the photo to position it, then zoom to frame your avatar. You can also use the arrow keys.</p>
+      <div class="avatar-crop__workspace">
+        <canvas id="avatar-crop-stage" width="320" height="320" tabindex="0" role="img" aria-label="Avatar crop area. Drag or use arrow keys to move the photo." data-i18n-aria-label="Avatar crop area. Drag or use arrow keys to move the photo."></canvas>
+        <div class="avatar-crop__preview">
+          <canvas id="avatar-crop-preview" width="96" height="96" role="img" aria-label="Circular avatar preview" data-i18n-aria-label="Circular avatar preview"></canvas>
+          <span data-i18n="Preview">Preview</span>
+        </div>
+      </div>
+      <label class="avatar-crop__zoom" for="avatar-crop-zoom">
+        <span data-i18n="Zoom">Zoom</span>
+        <input id="avatar-crop-zoom" type="range" min="1" max="4" step="0.01" value="1">
+      </label>
+      <p id="avatar-crop-status" class="display-name-status" role="status" aria-live="polite" hidden></p>
+      <div class="avatar-crop__actions">
+        <button type="button" id="avatar-crop-reset" class="auth-button" data-i18n="Reset Crop">Reset Crop</button>
+        <button type="button" id="avatar-crop-cancel" class="auth-button" data-i18n="Cancel">Cancel</button>
+        <button type="button" id="avatar-crop-confirm" class="auth-button auth-button--primary" data-i18n="Use This Crop">Use This Crop</button>
+      </div>
+      <p class="avatar-crop__note" data-i18n="Cropping stays on your device. Save Changes in your profile to upload.">Cropping stays on your device. Save Changes in your profile to upload.</p>
     </dialog>
     <header class="hero">
       <p class="eyebrow" data-i18n="Your world · Your adventure">Your world · Your adventure</p>
@@ -104,19 +140,39 @@
               <button class="auth-button auth-button--primary" type="submit" data-i18n="Create Campaign">Create Campaign</button>
             </form>
             <h3 id="campaign-management-title" hidden></h3>
-            <form id="campaign-invite-form" class="campaign-admin__form" hidden>
-              <label class="auth-form__field">
-                <span data-i18n="Add a Registered Player">Add a Registered Player</span>
-                <select id="campaign-invite-player" required>
-                  <option value="" data-i18n="Select a player">Select a player</option>
-                </select>
-              </label>
-              <button class="auth-button" type="submit" data-i18n="Add to Campaign">Add to Campaign</button>
-            </form>
-            <section id="campaign-members" class="campaign-members" hidden>
-              <h4 data-i18n="Current Players">Current Players</h4>
-              <div id="campaign-member-list" class="campaign-member-list"></div>
-            </section>
+            <div id="player-management" class="player-management" hidden>
+              <div class="player-management__toolbar">
+                <p data-i18n="Build your party. Search by display name or sign-in username.">Build your party. Search by display name or sign-in username.</p>
+                <button type="button" id="players-refresh" class="auth-button" data-i18n="Refresh Players">Refresh Players</button>
+              </div>
+              <p id="players-status" class="display-name-status" role="status" aria-live="polite" hidden></p>
+              <section id="campaign-members" class="player-management__panel campaign-members" hidden aria-labelledby="members-heading">
+                <div class="player-management__heading"><h4 id="members-heading" data-i18n="Your Party">Your Party</h4><span id="member-count" class="player-count"></span></div>
+                <label class="auth-form__field">
+                  <span class="visually-hidden" data-i18n="Search current players">Search current players</span>
+                  <input id="member-search" type="search" placeholder="Search your party..." data-i18n-placeholder="Search your party..." autocomplete="off">
+                </label>
+                <div id="campaign-member-list" class="campaign-member-list"></div>
+                <nav class="player-pagination" aria-label="Current players pages" data-i18n-aria-label="Current players pages">
+                  <button type="button" id="member-prev" class="auth-button" data-i18n="Previous">Previous</button>
+                  <span id="member-page" role="status" aria-live="polite"></span>
+                  <button type="button" id="member-next" class="auth-button" data-i18n="Next">Next</button>
+                </nav>
+              </section>
+              <form id="campaign-invite-form" class="player-management__panel" hidden aria-labelledby="invite-heading">
+                <div class="player-management__heading"><h4 id="invite-heading" data-i18n="Find Players">Find Players</h4><span id="invite-count" class="player-count"></span></div>
+                <label class="auth-form__field">
+                  <span class="visually-hidden" data-i18n="Search registered players">Search registered players</span>
+                  <input id="invite-search" type="search" placeholder="Search by name or @username..." data-i18n-placeholder="Search by name or @username..." autocomplete="off">
+                </label>
+                <div id="campaign-invite-list" class="campaign-member-list"></div>
+                <nav class="player-pagination" aria-label="Available players pages" data-i18n-aria-label="Available players pages">
+                  <button type="button" id="invite-prev" class="auth-button" data-i18n="Previous">Previous</button>
+                  <span id="invite-page" role="status" aria-live="polite"></span>
+                  <button type="button" id="invite-next" class="auth-button" data-i18n="Next">Next</button>
+                </nav>
+              </form>
+            </div>
           </section>
         </section>
       </div>

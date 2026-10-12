@@ -87,6 +87,9 @@
             "role": {
               ".validate": "newData.val() === 'player'"
             },
+            "avatarUrl": {
+              ".validate": "newData.isString() && newData.val().length <= 1000 && newData.val().matches(/^https:\\/\\/res\\.cloudinary\\.com\\/ehj3olxo\\/image\\/upload\\/.+$/)"
+            },
             "showInPlayerList": {
               ".validate": "newData.isBoolean()"
             },
@@ -142,6 +145,10 @@
         "displayName": {
           ".read": "auth != null",
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24"
+        },
+        "avatarUrl": {
+          ".read": "auth != null",
+          ".validate": "newData.isString() && newData.val().length <= 1000 && newData.val().matches(/^https:\\/\\/res\\.cloudinary\\.com\\/ehj3olxo\\/image\\/upload\\/.+$/)"
         },
         "showInPlayerList": {
           ".validate": "newData.isBoolean()"

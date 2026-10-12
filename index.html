@@ -4,19 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n="DND Map · Player">DND Map · Player</title>
-  <link rel="stylesheet" href="assets/styles/main.css?v=20261011-1">
+  <link rel="stylesheet" href="assets/styles/main.css?v=20261012-2">
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
   <script src="assets/scripts/firebase-config.js?v=20260927-1"></script>
-  <script src="assets/scripts/i18n.js?v=20261011-1" defer></script>
-  <script src="assets/scripts/main.js?v=20261011-1" defer></script>
+  <script src="assets/scripts/i18n.js?v=20261012-2" defer></script>
+  <script src="assets/scripts/avatar-crop.js?v=20261012-2" defer></script>
+  <script src="assets/scripts/main.js?v=20261012-2" defer></script>
 </head>
 <body data-view="player">
   <main class="page">
     <div class="account-bar">
       <button type="button" id="language-toggle" class="auth-button language-toggle" aria-label="Switch to Chinese">中文</button>
       <button type="button" id="user-center-open" class="auth-button account-button" aria-haspopup="dialog" aria-controls="user-center" hidden>
+        <span id="user-center-avatar" class="user-avatar user-avatar--small" aria-hidden="true"></span>
         <span id="user-center-name" class="account-button__name"></span><span data-i18n="User Center">User Center</span>
       </button>
     </div>
@@ -27,6 +29,18 @@
       </div>
       <p class="user-center__intro" data-i18n="Let your party know what to call you.">Let your party know what to call you.</p>
       <form id="display-name-form" class="user-center__form">
+        <div class="profile-avatar-editor">
+          <span id="profile-avatar-preview" class="user-avatar user-avatar--large" aria-hidden="true"></span>
+          <div class="profile-avatar-editor__controls">
+            <div class="auth-form__field">
+              <span data-i18n="Profile Photo">Profile Photo</span>
+              <input id="profile-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" hidden>
+              <button type="button" id="profile-avatar-choose" class="auth-button" aria-describedby="profile-avatar-help" data-i18n="Choose Photo">Choose Photo</button>
+            </div>
+            <button type="button" id="profile-avatar-remove" class="profile-avatar-remove" data-i18n="Remove Photo">Remove Photo</button>
+          </div>
+        </div>
+        <p id="profile-avatar-help" class="user-center__hint" data-i18n="JPG, PNG or WebP · up to 2 MB. Photos are shown in a circle. Save Changes to apply.">JPG, PNG or WebP · up to 2 MB. Photos are shown in a circle. Save Changes to apply.</p>
         <label class="auth-form__field">
           <span data-i18n="Display Name">Display Name</span>
           <input id="display-name-input" type="text" minlength="1" maxlength="24" required autocomplete="nickname" aria-describedby="display-name-help">
@@ -44,6 +58,28 @@
         <p id="display-name-status" class="display-name-status" role="status" aria-live="polite" hidden></p>
         <button type="submit" id="display-name-save" class="auth-button auth-button--primary" data-i18n="Save Changes">Save Changes</button>
       </form>
+    </dialog>
+    <dialog id="avatar-crop-dialog" class="user-center avatar-crop" aria-labelledby="avatar-crop-title" aria-describedby="avatar-crop-help">
+      <h2 id="avatar-crop-title" data-i18n="Crop Your Photo">Crop Your Photo</h2>
+      <p id="avatar-crop-help" data-i18n="Drag the photo to position it, then zoom to frame your avatar. You can also use the arrow keys.">Drag the photo to position it, then zoom to frame your avatar. You can also use the arrow keys.</p>
+      <div class="avatar-crop__workspace">
+        <canvas id="avatar-crop-stage" width="320" height="320" tabindex="0" role="img" aria-label="Avatar crop area. Drag or use arrow keys to move the photo." data-i18n-aria-label="Avatar crop area. Drag or use arrow keys to move the photo."></canvas>
+        <div class="avatar-crop__preview">
+          <canvas id="avatar-crop-preview" width="96" height="96" role="img" aria-label="Circular avatar preview" data-i18n-aria-label="Circular avatar preview"></canvas>
+          <span data-i18n="Preview">Preview</span>
+        </div>
+      </div>
+      <label class="avatar-crop__zoom" for="avatar-crop-zoom">
+        <span data-i18n="Zoom">Zoom</span>
+        <input id="avatar-crop-zoom" type="range" min="1" max="4" step="0.01" value="1">
+      </label>
+      <p id="avatar-crop-status" class="display-name-status" role="status" aria-live="polite" hidden></p>
+      <div class="avatar-crop__actions">
+        <button type="button" id="avatar-crop-reset" class="auth-button" data-i18n="Reset Crop">Reset Crop</button>
+        <button type="button" id="avatar-crop-cancel" class="auth-button" data-i18n="Cancel">Cancel</button>
+        <button type="button" id="avatar-crop-confirm" class="auth-button auth-button--primary" data-i18n="Use This Crop">Use This Crop</button>
+      </div>
+      <p class="avatar-crop__note" data-i18n="Cropping stays on your device. Save Changes in your profile to upload.">Cropping stays on your device. Save Changes in your profile to upload.</p>
     </dialog>
     <header class="hero">
       <p class="eyebrow" data-i18n="Your world · Your adventure">Your world · Your adventure</p>
