@@ -223,6 +223,7 @@ function getMapDataPath(suffix) {
 }
 
 function getCampaignViewUrl(mode, campaignId = getCurrentCampaignId()) {
+  if (window.DemoBackend) return `${mode === "dm" ? "dm.html" : "index.html"}?demo=1${campaignId ? "&campaign=" + encodeURIComponent(campaignId) : ""}`;
   return `${mode === "dm" ? "dm.html" : "index.html"}${campaignId ? `?campaign=${encodeURIComponent(campaignId)}` : ""}`;
 }
 
@@ -243,6 +244,7 @@ function getVisibilityStorageKey(baseKey) {
 }
 
 function loadMarkerVisibility() {
+  if (window.DemoBackend) return {}; // Demo database is the only source of truth, including after reset.
   try {
     const stored = window.localStorage.getItem(getVisibilityStorageKey(VISIBILITY_STORAGE_KEY));
     const parsed = stored ? JSON.parse(stored) : {};
@@ -262,6 +264,7 @@ function loadMarkerVisibility() {
 }
 
 function saveMarkerVisibility() {
+  if (window.DemoBackend) return; // Never write to production marker-cache keys.
   try {
     window.localStorage.setItem(
       getVisibilityStorageKey(VISIBILITY_STORAGE_KEY),
@@ -451,6 +454,7 @@ async function loadDisplayName(uid, fallback) {
 }
 
 function safeAvatarUrl(value) {
+  if (window.DemoBackend?.isLocalImage(value)) return value;
   if (typeof value !== "string" || value.length > 1000) return "";
   try {
     const url = new URL(value);
@@ -651,6 +655,7 @@ function normalizeImageFileName(value) {
 
 function getImagePathFromFileName(fileName) {
   const normalizedFileName = normalizeImageFileName(fileName);
+  if (window.DemoBackend) return window.DemoBackend.imagePath(normalizedFileName);
   return normalizedFileName ? `assets/images/${encodeURIComponent(normalizedFileName)}` : "";
 }
 
@@ -665,6 +670,7 @@ function getMapIdFromTitle(title) {
 
 function isSafeImageFileName(fileName) {
   const normalizedFileName = normalizeImageFileName(fileName);
+  if (window.DemoBackend) return !!window.DemoBackend.imagePath(normalizedFileName);
   return (
     normalizedFileName.length > 0 &&
     normalizedFileName.length <= 120 &&
@@ -711,6 +717,7 @@ function getImageUploadValidationError(file) {
 }
 
 async function uploadImageToCloudinary(file) {
+  if (window.DemoBackend) return window.DemoBackend.uploadImage(file);
   if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_UPLOAD_PRESET) {
     throw new Error(t("Cloudinary upload is not configured."));
   }
@@ -796,6 +803,7 @@ async function loadImageFileOptions() {
 }
 
 async function fetchImageFileNames() {
+  if (window.DemoBackend) return window.DemoBackend.images;
   try {
     const response = await fetch("/api/images", { cache: "no-store" });
     if (response.ok) {
@@ -1037,7 +1045,7 @@ function renderMarkerIconEditor(marker) {
     } catch (error) {
       console.error("Unable to update marker icon.", error);
       status.dataset.state = "error";
-      setUiText(status, t("Marker icon could not be saved. Check your Firebase rules."));
+      setUiText(status, window.DemoBackend ? t(error.message) : t("Marker icon could not be saved. Check your Firebase rules."));
     } finally {
       saveButton.disabled = false;
     }
@@ -1388,7 +1396,7 @@ async function syncCurrentPlayerDirectoryProfile() {
     ...(safeAvatarUrl(currentUserProfile.avatarUrl) ? { avatarUrl: safeAvatarUrl(currentUserProfile.avatarUrl) } : {}),
     role: "player",
     showInPlayerList: currentUserProfile.showInPlayerList !== false,
-    lastUpdated: window.firebase.database.ServerValue.TIMESTAMP
+    lastUpdated: window.DemoBackend ? Date.now() : window.firebase.database.ServerValue.TIMESTAMP
   });
 }
 
@@ -1415,7 +1423,16 @@ function broadcastVisibilityState() {
     return;
   }
 
-  databaseRef.set(markerVisibility).catch((error) => {
+  const visibilityRef = databaseRef;
+  visibilityRef.set(markerVisibility).catch(async (error) => {
+    if (window.DemoBackend) {
+      if (databaseRef !== visibilityRef) return;
+      const saved = await visibilityRef.once("value");
+      if (databaseRef !== visibilityRef) return;
+      applyVisibilitySnapshot(saved.val() || {});
+      setDmMarkerStatus(t(error.message), "error");
+      return;
+    }
     console.warn("Unable to sync marker visibility to Firebase.", error);
     setAuthMessage(t("DM state could not be saved to Firebase. Check your database rules."), "error");
   });
@@ -1500,6 +1517,11 @@ function applyCampaignRootMap(rootMap) {
 }
 
 function initializeFirebaseServices() {
+  if (window.DemoBackend) {
+    firebaseAuth = window.DemoBackend.auth;
+    firebaseDatabase = window.DemoBackend.database;
+    return true;
+  }
   if (!window.firebase || !window.FIREBASE_CONFIG) {
     setAuthMessage(t("Firebase SDK or config is unavailable, so authentication cannot start."), "error");
     return false;
@@ -1760,7 +1782,9 @@ async function deleteCampaign(campaignId, deleteButton) {
 
   const campaignName = membership.name || campaignId;
   const shouldDelete = window.confirm(
-    t('Permanently delete "{name}"?\n\nThis deletes its maps, markers, and player memberships. Cloudinary images remain in your Media Library. This cannot be undone.', { name: campaignName })
+    t(window.DemoBackend
+      ? 'Delete demo campaign "{name}"? Its maps, markers, and memberships will be removed from this browser. Reset Demo can restore the sample world.'
+      : 'Permanently delete "{name}"?\n\nThis deletes its maps, markers, and player memberships. Cloudinary images remain in your Media Library. This cannot be undone.', { name: campaignName })
   );
   if (!shouldDelete) {
     return;
@@ -1785,8 +1809,10 @@ async function deleteCampaign(campaignId, deleteButton) {
 
     await firebaseDatabase.ref().update(updates);
 
-    window.localStorage.removeItem(`${VISIBILITY_STORAGE_KEY}:${campaignId}`);
-    window.localStorage.removeItem(`${VISIBILITY_STORAGE_VERSION_KEY}:${campaignId}`);
+    if (!window.DemoBackend) {
+      window.localStorage.removeItem(`${VISIBILITY_STORAGE_KEY}:${campaignId}`);
+      window.localStorage.removeItem(`${VISIBILITY_STORAGE_VERSION_KEY}:${campaignId}`);
+    }
     delete campaignMemberships[campaignId];
 
     if (activeCampaignId === campaignId) {
@@ -1809,7 +1835,7 @@ async function deleteCampaign(campaignId, deleteButton) {
     for (const button of cardButtons) {
       button.disabled = false;
     }
-    setAuthMessage(t("Campaign could not be deleted. Check your Firebase rules and try again."), "error");
+    setAuthMessage(window.DemoBackend ? t(error.message) : t("Campaign could not be deleted. Check your Firebase rules and try again."), "error");
   } finally {
     campaignDeleteBusy = false;
   }
@@ -1994,6 +2020,10 @@ function updateAuthCopy() {
   }
 
   if (!currentUser) {
+    if (window.DemoBackend) {
+      setUiText(authCopy, "Choose a role to explore the demo. No registration or password needed.");
+      return;
+    }
     setUiText(authCopy,
       viewMode === "dm"
         ? "Sign in or register to create a campaign and manage your maps and players as a DM."
@@ -2021,6 +2051,8 @@ function updateAuthCopy() {
 }
 
 function updateSessionPanel() {
+  const demoEntry = document.getElementById("demo-entry");
+  if (demoEntry) demoEntry.hidden = !!currentUser;
   if (userCenterOpen) userCenterOpen.hidden = !currentUser || !currentUserProfile;
   if (userCenterName) userCenterName.textContent = currentUser ? getDisplayName() : "";
   renderAvatar(userCenterAvatar, currentUser ? getDisplayName() : "", currentUserProfile?.avatarUrl);
@@ -2034,7 +2066,7 @@ function updateSessionPanel() {
     sessionPanel.hidden = true;
     sessionSummary.textContent = "";
     if (authForm) {
-      authForm.hidden = false;
+      authForm.hidden = !!window.DemoBackend;
     }
     if (authUsernameInput) {
       authUsernameInput.value = "";
@@ -2071,7 +2103,7 @@ function updateSessionPanel() {
   }
   const mapViewSwitch = document.getElementById("map-view-switch");
   if (mapViewSwitch) {
-    mapViewSwitch.hidden = viewMode === "player" && !isCampaignDm();
+    mapViewSwitch.hidden = !window.DemoBackend && viewMode === "player" && !isCampaignDm();
     setUiText(mapViewSwitch, viewMode === "dm" ? t("Player Preview") : t("DM Workspace"));
     mapViewSwitch.href = getCampaignViewUrl(viewMode === "dm" ? "player" : "dm");
   }
@@ -2243,6 +2275,10 @@ function renderDmControls() {
 
 function applyViewMode() {
   document.body.dataset.view = viewMode;
+  if (window.DemoBackend && viewIntro) {
+    setUiText(viewIntro, "Explore an original fantasy world, then step behind the screen and make it your own.");
+    return;
+  }
 
   if (viewIntro) {
     setUiText(viewIntro,
@@ -2528,14 +2564,14 @@ async function buildCustomMarkerRecord(position = null) {
 
   try {
     if (imageUploadFile) {
-      setDmMarkerStatus(t("Uploading marker image to Cloudinary..."), "info");
+      setDmMarkerStatus(window.DemoBackend ? t("Preparing local image...") : t("Uploading marker image to Cloudinary..."), "info");
       const upload = await uploadImageToCloudinary(imageUploadFile);
       imageFileName = upload.fileName;
       imagePath = upload.path;
     }
 
     if (isMapMarker && mapImageUploadFile) {
-      setDmMarkerStatus(t("Uploading map image to Cloudinary..."), "info");
+      setDmMarkerStatus(window.DemoBackend ? t("Preparing local image...") : t("Uploading map image to Cloudinary..."), "info");
       const upload = await uploadImageToCloudinary(mapImageUploadFile);
       mapImageFileName = upload.fileName;
       mapSrc = upload.path;
@@ -2615,7 +2651,7 @@ async function saveCustomMarker(markerRef, markerRecord, successMessage, success
     resetDmMarkerForm();
   } catch (error) {
     console.error("Unable to create custom marker.", error);
-    setDmMarkerStatus(t("Marker could not be saved. Check your Firebase rules."), "error");
+    setDmMarkerStatus(window.DemoBackend ? t(error.message) : t("Marker could not be saved. Check your Firebase rules."), "error");
   }
 }
 
@@ -2701,7 +2737,7 @@ async function deleteCustomMarker(marker) {
     setDmMarkerStatus('Marker "{name}" deleted.', "success", { name: markerName });
   } catch (error) {
     console.error("Unable to delete custom marker.", error);
-    setDmMarkerStatus(t("Marker could not be deleted. Check your Firebase rules."), "error");
+    setDmMarkerStatus(window.DemoBackend ? t(error.message) : t("Marker could not be deleted. Check your Firebase rules."), "error");
   }
 }
 
@@ -2821,7 +2857,7 @@ campaignCreateForm?.addEventListener("submit", async (event) => {
     selectCampaign(campaignId, true);
   } catch (error) {
     console.error("Unable to create campaign.", error);
-    setAuthMessage(t("Campaign could not be created. Check your Firebase rules."), "error");
+    setAuthMessage(window.DemoBackend ? t(error.message) : t("Campaign could not be created. Check your Firebase rules."), "error");
   } finally {
     campaignCreateBusy = false;
     submitButton.disabled = false;
@@ -2856,7 +2892,7 @@ rootMapForm?.addEventListener("submit", async (event) => {
 
   try {
     if (uploadFile) {
-      setUiText(rootMapStatus, t("Uploading starting map to Cloudinary..."));
+      setUiText(rootMapStatus, t(window.DemoBackend ? "Preparing local image..." : "Uploading starting map to Cloudinary..."));
       const upload = await uploadImageToCloudinary(uploadFile);
       fileName = upload.fileName;
       imageSrc = upload.path;
@@ -2923,7 +2959,7 @@ async function changeCampaignPlayer(uid, remove = false) {
       { name: player.displayName, campaign: membership.name || campaignId });
   } catch (error) {
     console.warn("Unable to update campaign player.", error);
-    if (isCurrent()) setPlayersStatus(remove ? "Player could not be removed. Check your Firebase rules."
+    if (isCurrent()) setPlayersStatus(window.DemoBackend ? error.message : remove ? "Player could not be removed. Check your Firebase rules."
       : "Player could not be added. Check the username and Firebase rules.", "error");
   } finally {
     pendingPlayerActions.delete(actionKey);
@@ -3080,7 +3116,7 @@ displayNameForm?.addEventListener("submit", async (event) => {
     if (draft?.file && !draft.url) {
       const validationError = getAvatarValidationError(draft.file);
       if (validationError) throw new Error(validationError);
-      setDisplayNameStatus(t("Uploading profile photo…"), "info");
+      setDisplayNameStatus(window.DemoBackend ? t("Preparing local image...") : t("Uploading profile photo…"), "info");
       const upload = await uploadImageToCloudinary(draft.file);
       if (currentUser?.uid !== uid) return;
       draft.url = safeAvatarUrl(upload.path);
@@ -3123,7 +3159,7 @@ displayNameForm?.addEventListener("submit", async (event) => {
     setDisplayNameStatus(t("Profile saved. Your party will see your updated details."), "success");
   } catch (error) {
     console.error("Unable to update display name.", error);
-    if (currentUser?.uid === uid) setDisplayNameStatus(t("Could not save. Check your connection and try again."), "error");
+    if (currentUser?.uid === uid) setDisplayNameStatus(window.DemoBackend ? t(error.message) : t("Could not save. Check your connection and try again."), "error");
   } finally {
     profileSaveBusy = false;
     profileControls.forEach(control => { if (control) control.disabled = false; });
@@ -3157,7 +3193,7 @@ async function handleAuthStateChanged(user) {
     updateSessionPanel();
     updateAppVisibility();
     setAuthBusy(false);
-    if (viewMode === "dm") {
+    if (viewMode === "dm" && !window.DemoBackend) {
       setAuthMessage(t("Sign in or register to create and manage your own campaigns."), "info");
     } else if (!authMessage?.textContent) {
       setAuthMessage("", "info");

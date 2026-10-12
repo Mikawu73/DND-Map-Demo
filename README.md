@@ -1,3 +1,51 @@
+# DND Map — Portfolio Demo
+
+This is the **`demo` branch**: a self-contained, browser-local showcase of [the full application](https://github.com/Mikawu73/DND-CoS-Map/tree/main). It does not load Firebase, sign in to real accounts, or upload to Cloudinary. The production configuration is intentionally absent.
+
+## Try the demo locally
+
+```powershell
+python -m http.server 8000 --bind 127.0.0.1
+```
+
+Open <http://127.0.0.1:8000/> and choose **Player Demo** or **DM Demo**. No account or password is required. Any static host can serve this branch; no backend or build step is needed.
+
+- Explore **The Lantern Coast**, a fictional island with an original SVG map, a linked harbor map, and Captain Mira's portrait.
+- In DM mode, reveal **The Smuggler's Cove**, add markers, and return to **Campaigns → Manage Players** to search, invite, and remove fictional players.
+- Switch to Player to see the revealed locations. Player mode has no campaign editing or player-management controls.
+- Try User Center, display names, avatar cropping, and the English/Chinese UI switch. Story content stays in English.
+- **Reset Demo** restores the sample world. It removes only the demo data, not production campaigns or the language preference.
+
+### Isolation and limitations
+
+The two roles are simulated identities (`demodm` and `demoplayer`), not shared production accounts. All visitors get their own browser-local copy. Changes persist under `dnd-map-demo-v1` in localStorage; the active demo session uses sessionStorage. Same-origin tabs share local data, but simultaneous edits are last-write-wins: this is not a multiplayer backend. Different devices do not synchronize.
+
+Images are kept locally as data URLs (up to 2 MB per image, approximately 4 million characters for the entire saved dataset). If storage is blocked, edits last only for the current page; if storage fills, use smaller images or reset. Do not enter personal or sensitive information. Hidden markers and simulated role checks demonstrate the UI, **not an authentication or secrecy boundary**.
+
+`demo-seed.js` supplies the fictional data and `demo-backend.js` adapts the app's data operations to local storage. A Content Security Policy restricts connections to the site's own origin. The full application's Firebase rules and Python server remain in the repository for reference; neither is needed to run this demo.
+
+### Verification
+
+```powershell
+node --test tests/*.test.cjs
+```
+
+For end-to-end checks in a disposable headless Chrome profile, run `node tests/demo-browser.cjs` (set `CHROME_PATH` if Chrome is not at its standard Windows location). This verifies role switching, local persistence, maps, player management, reset, localization, asset loading, and narrow-screen overflow. Screenshots are saved to a temporary folder printed by the runner. The test script is injected only by this test server, not by the demo pages.
+
+The demo is not automatically published by creating this branch. Deploy its static files to a separate site or branch-based hosting project so the existing live app stays unchanged.
+
+## 中文说明
+
+这是独立的 **demo 分支**，提供免注册的 Player / DM 体验、虚构战役、地图编辑、玩家管理、头像裁剪和中英文切换。数据只保存在当前浏览器，不连接正式 Firebase，也不上传到 Cloudinary。用上面的命令启动后打开首页即可体验；点击 **Reset Demo** 可以恢复初始数据。此分支尚不代表已发布的网站。
+
+---
+
+# Full Application Reference / 正式版说明
+
+The documentation below describes the **main branch**, including its real account and cloud services. Those setup instructions do not apply to this demo branch.
+
+以下保留正式版的英文与中文说明；其中的真实账号、Firebase 和 Cloudinary 配置不适用于当前 demo 分支。
+
 # DND Map
 
 English · [简体中文](#dnd-地图网站)
@@ -151,7 +199,7 @@ This fixture is for local verification, not a deployed public demo.
 
 - **Hidden markers are a UI visibility feature, not a private-data boundary.** Campaign members can read their campaign's data, and bundled static content is accessible by URL. Do not store confidential DM notes in player-readable marker descriptions.
 - Map hierarchy is organized through linked markers; standalone multi-map management, co-DM assignment, invite codes, fog of war, tokens, and import/export are not implemented.
-- The project does not currently include a public demo mode or isolated per-visitor demo sessions.
+- An isolated browser-local portfolio demo is maintained separately on the `demo` branch; it does not use the production backend.
 
 ---
 

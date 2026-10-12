@@ -1,0 +1,30 @@
+.demo-banner { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 20px; margin-bottom: 16px; border-radius: 16px; background: #294c50; color: #faf1d8; }
+.demo-banner strong { font: 700 0.72rem system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.15em; }
+.demo-banner p { margin: 6px 0 0; font: 0.83rem/1.5 system-ui, sans-serif; color: #dbdfcd; }
+.demo-banner .auth-button { flex-shrink: 0; width: auto; box-shadow: none; border: 1px solid #8b9e8b; background: transparent; color: #faf1d8; }
+.demo-nav { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0 0 18px; }
+.demo-nav a { font: 0.8rem system-ui, sans-serif; color: #4a574b; text-underline-offset: 4px; }
+.demo-nav a:hover { color: #241b14; }
+.demo-entry { display: grid; grid-template-columns: 1fr 1.05fr; gap: 24px; margin-top: 24px; }
+.demo-entry[hidden] { display: none; }
+.demo-entry__cards { display: grid; gap: 16px; }
+.demo-role { padding: 22px; border: 1px solid #d2c8b5; border-radius: 16px; background: #fffbf2; }
+.demo-role h3 { font-size: 1.45rem; margin: 0; }
+.demo-role > p:not(.eyebrow) { color: var(--muted); line-height: 1.6; margin: 12px 0 18px; }
+.demo-role .auth-button { width: fit-content; min-height: 44px; }
+.demo-entry__map { margin: 0; display: flex; flex-direction: column; justify-content: center; padding: 14px; border-radius: 16px; background: #2d4f52; }
+.demo-entry__map img { display: block; width: 100%; height: auto; }
+.demo-entry__map figcaption { padding: 16px 8px 8px; color: #e6d7b4; text-align: center; line-height: 1.5; font-size: 0.85rem; }
+.demo-entry__note { grid-column: 1 / -1; margin: 0; color: var(--muted); font: 0.8rem/1.5 system-ui, sans-serif; }
+.demo-guide { padding: 14px 18px; border: 1px dashed #a99a76; border-radius: 12px; color: #5a4b35; line-height: 1.6; margin: 0 0 18px; }
+/* There are no real credentials or account registration in the portfolio demo. */
+#auth-form { display: none !important; }
+@media (max-width: 800px) {
+  .demo-entry { grid-template-columns: minmax(0, 1fr); }
+  .demo-entry__map { order: -1; }
+  .map-legend__items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+}
+@media (max-width: 480px) {
+  .demo-banner { align-items: flex-start; flex-direction: column; gap: 12px; padding: 16px; }
+  .demo-role { padding: 18px; }
+}

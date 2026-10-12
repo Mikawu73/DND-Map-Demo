@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" role="img" aria-labelledby="title desc">
+<title id="title">The Lantern Coast</title><desc id="desc">An original fantasy island chart with forests, mountains, a harbor, an observatory and a lighthouse.</desc>
+<defs>
+<pattern id="sea" width="70" height="55" patternUnits="userSpaceOnUse"><path d="M5 30q12-9 24 0t24 0" fill="none" stroke="#507b7b" stroke-width="1" opacity=".35"/></pattern>
+<pattern id="grid" width="100" height="100" patternUnits="userSpaceOnUse"><path d="M100 0H0V100" fill="none" stroke="#afc5b6" opacity=".12"/></pattern>
+<linearGradient id="water" x2="1" y2="1"><stop stop-color="#24484f"/><stop offset="1" stop-color="#406965"/></linearGradient>
+<linearGradient id="land" x2=".5" y2="1"><stop stop-color="#ede1ba"/><stop offset="1" stop-color="#c8c395"/></linearGradient>
+<g id="tree" stroke="#456354" stroke-width="2"><path d="M0 0v34" fill="none"/><path d="M0-17l-16 24h8l-13 20h42L8 7h8Z" fill="#789577"/></g>
+<g id="mountain" stroke="#8e8265" stroke-width="2"><path d="M-47 40L0-40l50 80Z" fill="#b4b29a"/><path d="M-16-12L0-40l20 32-16-6-9 12Z" fill="#f1e7c8"/><path d="M0-40l8 80h42Z" fill="#7b8b7b" opacity=".35"/></g>
+</defs>
+<rect width="1400" height="900" fill="url(#water)"/><rect width="1400" height="900" fill="url(#sea)"/><rect width="1400" height="900" fill="url(#grid)"/>
+<rect x="24" y="24" width="1352" height="852" rx="5" fill="none" stroke="#c6b58b" stroke-width="2"/><rect x="32" y="32" width="1336" height="836" fill="none" stroke="#c6b58b" opacity=".4"/>
+<g fill="#eddfb9" text-anchor="middle" font-family="Georgia,serif"><text x="700" y="88" font-size="39" letter-spacing="8">THE LANTERN COAST</text><text x="700" y="115" font-size="13" letter-spacing="4" opacity=".75">A CHART OF UNFINISHED ADVENTURES</text></g>
+<path d="M205 305Q230 245 328 228L411 247 460 179 575 174 637 132 760 139 824 189 949 174 1031 248 1084 335 1030 402 1124 469 1137 552 1090 620 983 615 907 683 795 667 733 736 639 747 603 676 518 708 450 661 354 660 302 585 270 501 204 474 238 389Z" fill="none" stroke="#86b3a7" stroke-width="23" opacity=".24"/>
+<path d="M205 305Q230 245 328 228L411 247 460 179 575 174 637 132 760 139 824 189 949 174 1031 248 1084 335 1030 402 1124 469 1137 552 1090 620 983 615 907 683 795 667 733 736 639 747 603 676 518 708 450 661 354 660 302 585 270 501 204 474 238 389Z" fill="url(#land)" stroke="#bfa575" stroke-width="4"/>
+<path d="M715 246Q692 333 737 385T677 516L658 600Q643 645 671 717" fill="none" stroke="#739b97" stroke-width="14"/><path d="M715 246Q692 333 737 385T677 516L658 600Q643 645 671 717" fill="none" stroke="#a4c4b3" stroke-width="6"/>
+<path d="M336 297Q381 408 506 499L658 567 798 405 896 261M658 567Q571 645 448 648" fill="none" stroke="#a37955" stroke-width="4" stroke-dasharray="7 9"/>
+<use href="#mountain" x="670" y="185"/>
+<use href="#mountain" x="735" y="170"/>
+<use href="#mountain" x="785" y="205"/>
+<use href="#mountain" x="630" y="235"/>
+<use href="#tree" x="510" y="285"/>
+<use href="#tree" x="550" y="260"/>
+<use href="#tree" x="590" y="300"/>
+<use href="#tree" x="540" y="330"/>
+<use href="#tree" x="735" y="355"/>
+<use href="#tree" x="775" y="325"/>
+<use href="#tree" x="815" y="345"/>
+<use href="#tree" x="855" y="380"/>
+<use href="#tree" x="760" y="400"/>
+<use href="#tree" x="800" y="440"/>
+<use href="#tree" x="845" y="425"/>
+<use href="#tree" x="900" y="465"/>
+<use href="#tree" x="585" y="430"/>
+<use href="#tree" x="545" y="460"/>
+<use href="#tree" x="500" y="420"/>
+<path d="M174 623l35-29 48 15 15 42-43 25-43-14Z M965 743l29-18 32 19-9 34-38 7Z M335 774l46-15 35 21-11 43-55 9-33-30Z" fill="#d2c79d" stroke="#b5a177" stroke-width="3"/>
+<g font-family="Georgia,serif" text-anchor="middle" fill="#4c4935" font-size="20"><text x="336" y="346">The Last Lantern</text><text x="658" y="613">Briarport</text><text x="896" y="306">Glass Observatory</text><text x="798" y="462" font-style="italic">Whisperwood</text><text x="448" y="694" font-size="16">Tidebound Ferry</text></g>
+<g fill="#dccfa8" font-family="Georgia,serif" font-size="24" font-style="italic" opacity=".7"><text x="85" y="560" transform="rotate(-75 85 560)">The Quiet Sea</text><text x="1020" y="800">Uncharted waters</text></g>
+<g transform="translate(1230 200)" stroke="#e2d0a5" fill="none"><circle r="44"/><circle r="38" opacity=".5"/><path d="M0-63L12 0 0 63-12 0ZM-63 0L0-12 63 0 0 12Z"/><path d="M0-63L12 0H0Z" fill="#e2d0a5"/><text y="-75" text-anchor="middle" fill="#e2d0a5" stroke="none" font-family="Georgia" font-size="19">N</text></g>
+<g transform="translate(95 800)" stroke="#d7c49d" fill="#d7c49d" font-family="Georgia" font-size="12"><path d="M0 0h200M0-5v10M100-5v10M200-5v10" fill="none"/><text y="23" stroke="none">0</text><text x="84" y="23" stroke="none">5 miles</text><text x="184" y="23" stroke="none">10</text></g>
+<text x="700" y="850" fill="#cfbf99" text-anchor="middle" font-family="Georgia" font-size="12" letter-spacing="2">ORIGINAL DEMO WORLD · EXPLORE THE MARKERS</text>
+</svg>

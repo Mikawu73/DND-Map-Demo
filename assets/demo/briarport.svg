@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" role="img" aria-labelledby="title desc">
+<title id="title">Briarport Harbor</title><desc id="desc">Original harbor district plan with an inn, market square and sailing docks.</desc>
+<defs><pattern id="waves" width="60" height="45" patternUnits="userSpaceOnUse"><path d="M5 20q10-7 20 0t20 0" stroke="#598884" fill="none" opacity=".4"/></pattern>
+<g id="house"><rect x="-34" y="-24" width="68" height="48" rx="2" fill="#d7c39c" stroke="#7f7257" stroke-width="3"/><path d="M-39 0L0-31l39 31L0 30Z" fill="#8d6855" stroke="#705742" stroke-width="2"/><path d="M0-31v61" stroke="#ae8b6b" stroke-width="3"/></g></defs>
+<rect width="1400" height="900" fill="#355d61"/><rect width="1400" height="900" fill="url(#waves)"/>
+<path d="M0 0H1400V465L1320 488 1225 470 1150 521 980 523 894 551 779 519 690 570 605 554 493 595 345 548 251 585 97 555 0 580Z" fill="#daceac" stroke="#a89c78" stroke-width="6"/>
+<path d="M180 80L222 527M250 240L1140 250M140 475L1180 445M450 154L450 526M870 137L870 504" fill="none" stroke="#eee2c4" stroke-width="36"/><path d="M180 80L222 527M250 240L1140 250M140 475L1180 445M450 154L450 526M870 137L870 504" fill="none" stroke="#b2a283" stroke-width="2" stroke-dasharray="4 9"/>
+<rect x="790" y="290" width="170" height="106" rx="18" fill="#e7dcbc" stroke="#a89c7d" stroke-width="3"/>
+<use href="#house" x="310" y="175"/>
+<use href="#house" x="330" y="345"/>
+<use href="#house" x="565" y="170"/>
+<use href="#house" x="588" y="355"/>
+<use href="#house" x="735" y="175"/>
+<use href="#house" x="1040" y="174"/>
+<use href="#house" x="1060" y="345"/>
+<use href="#house" x="1200" y="360"/>
+<use href="#house" x="350" y="485"/>
+<use href="#house" x="1020" y="475"/>
+<use href="#house" x="120" y="400"/>
+<g stroke="#755c43" stroke-width="3" fill="#aa8f63"><path d="M580 545h45v210h-45ZM660 553h44v234h-44ZM965 520h44v235h-44Z"/><path d="M554 706h176v26H554ZM940 692h94v27h-94Z"/></g>
+<g transform="translate(772 688) rotate(8)"><path d="M0-75Q56-20 28 75Q-37 95-45 14Z" fill="#584c38" stroke="#c1a67d" stroke-width="4"/><path d="M-12-58v125" stroke="#cfbc92" stroke-width="3"/><path d="M-9-49Q39-14-9 31Z" fill="#efe3c5"/><path d="M-16-39Q-50-5-16 32Z" fill="#d3c19b"/></g>
+<g fill="#433e2d" font-family="Georgia,serif" text-anchor="middle"><text x="700" y="85" font-size="42" letter-spacing="8">BRIARPORT HARBOR</text><text x="700" y="117" font-size="14" letter-spacing="4">SALT, STORIES &amp; SECOND CHANCES</text><text x="462" y="398" font-size="20">The Wandering Kettle</text><text x="868" y="424" font-size="20">Saltmarket Square</text></g>
+<g fill="#e2d2ac" font-family="Georgia,serif" text-anchor="middle"><text x="672" y="825" font-size="23">The Wayfarer's Berth</text><text x="200" y="760" font-size="26" font-style="italic" opacity=".65">Harbor waters</text></g>
+<rect x="22" y="22" width="1356" height="856" rx="4" fill="none" stroke="#b8a77d" stroke-width="3"/>
+</svg>

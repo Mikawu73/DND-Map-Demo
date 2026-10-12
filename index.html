@@ -2,19 +2,28 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n="DND Map · Player">DND Map · Player</title>
-  <link rel="stylesheet" href="assets/styles/main.css?v=20261012-2">
-  <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/12.11.0/firebase-database-compat.js"></script>
-  <script src="assets/scripts/firebase-config.js?v=20260927-1"></script>
-  <script src="assets/scripts/i18n.js?v=20261012-2" defer></script>
-  <script src="assets/scripts/avatar-crop.js?v=20261012-2" defer></script>
-  <script src="assets/scripts/main.js?v=20261012-2" defer></script>
+  <link rel="stylesheet" href="assets/styles/main.css?v=demo-20261012-1">
+  <link rel="stylesheet" href="assets/styles/demo.css?v=demo-20261012-1">
+  <script src="assets/scripts/i18n.js?v=demo-20261012-1" defer></script>
+  <script src="assets/scripts/demo-seed.js?v=demo-20261012-1" defer></script>
+  <script src="assets/scripts/demo-backend.js?v=demo-20261012-1" defer></script>
+  <script src="assets/scripts/avatar-crop.js?v=demo-20261012-1" defer></script>
+  <script src="assets/scripts/main.js?v=demo-20261012-1" defer></script>
 </head>
 <body data-view="player">
   <main class="page">
+    <aside class="demo-banner" aria-label="Demo information" data-i18n-aria-label="Demo information">
+      <div><strong data-i18n="Portfolio Demo">Portfolio Demo</strong><p id="demo-storage-note" data-i18n="Changes stay in this browser. No account, cloud uploads, or production data.">Changes stay in this browser. No account, cloud uploads, or production data.</p></div>
+      <button type="button" id="demo-reset" class="auth-button" data-i18n="Reset Demo">Reset Demo</button>
+    </aside>
+    <nav class="demo-nav" aria-label="Demo views" data-i18n-aria-label="Demo views">
+      <a href="index.html?demo=1&amp;campaign=demo-lantern-coast" data-i18n="Player Demo">Player Demo</a>
+      <a href="dm.html?demo=1&amp;campaign=demo-lantern-coast" data-i18n="DM Demo">DM Demo</a>
+      <a href="https://github.com/Mikawu73/DND-CoS-Map/tree/main" target="_blank" rel="noopener noreferrer" data-i18n="View Full Project">View Full Project</a>
+    </nav>
     <div class="account-bar">
       <button type="button" id="language-toggle" class="auth-button language-toggle" aria-label="Switch to Chinese">中文</button>
       <button type="button" id="user-center-open" class="auth-button account-button" aria-haspopup="dialog" aria-controls="user-center" hidden>
@@ -79,7 +88,7 @@
         <button type="button" id="avatar-crop-cancel" class="auth-button" data-i18n="Cancel">Cancel</button>
         <button type="button" id="avatar-crop-confirm" class="auth-button auth-button--primary" data-i18n="Use This Crop">Use This Crop</button>
       </div>
-      <p class="avatar-crop__note" data-i18n="Cropping stays on your device. Save Changes in your profile to upload.">Cropping stays on your device. Save Changes in your profile to upload.</p>
+      <p class="avatar-crop__note" data-i18n="Cropping stays on your device. Save Changes to keep the avatar in this browser.">Cropping stays on your device. Save Changes to keep the avatar in this browser.</p>
     </dialog>
     <header class="hero">
       <p class="eyebrow" data-i18n="Your world · Your adventure">Your world · Your adventure</p>
@@ -92,7 +101,7 @@
     <section id="auth-panel" class="auth-shell" aria-labelledby="auth-title">
       <div class="auth-shell__card">
         <div class="auth-shell__header">
-          <h2 id="auth-title" data-i18n="Player View">Player View</h2>
+          <h2 id="auth-title" data-i18n="Choose Your Role">Choose Your Role</h2>
           <p id="auth-copy" class="auth-shell__copy" data-i18n="One account can host your own campaigns and join others as a player.">
             One account can host your own campaigns and join others as a player.
           </p>
@@ -100,7 +109,29 @@
 
         <div id="auth-message" class="auth-shell__message" hidden></div>
 
-        <form id="auth-form" class="auth-form">
+        <section id="demo-entry" class="demo-entry">
+          <div class="demo-entry__cards">
+            <article class="demo-role">
+              <p class="eyebrow" data-i18n="Explore the story">Explore the story</p>
+              <h3 data-i18n="As a Player">As a Player</h3>
+              <p data-i18n="Discover locations, meet Captain Mira, and open Briarport's harbor map.">Discover locations, meet Captain Mira, and open Briarport's harbor map.</p>
+              <a class="auth-button auth-button--primary" href="index.html?demo=1&amp;campaign=demo-lantern-coast" data-i18n="Try Player Demo">Try Player Demo</a>
+            </article>
+            <article class="demo-role">
+              <p class="eyebrow" data-i18n="Shape the adventure">Shape the adventure</p>
+              <h3 data-i18n="As a Dungeon Master">As a Dungeon Master</h3>
+              <p data-i18n="Reveal the hidden cove, place your own markers, and manage a fictional party.">Reveal the hidden cove, place your own markers, and manage a fictional party.</p>
+              <a class="auth-button auth-button--primary" href="dm.html?demo=1&amp;campaign=demo-lantern-coast" data-i18n="Try DM Demo">Try DM Demo</a>
+            </article>
+          </div>
+          <figure class="demo-entry__map">
+            <img src="assets/demo/lantern-coast.svg" alt="Preview of the Lantern Coast demo map" data-i18n-alt="Preview of the Lantern Coast demo map">
+            <figcaption data-i18n="The Lantern Coast · an original world, ready to explore">The Lantern Coast · an original world, ready to explore</figcaption>
+          </figure>
+          <p class="demo-entry__note" data-i18n="No signup. No shared accounts. Your changes are yours to experiment with.">No signup. No shared accounts. Your changes are yours to experiment with.</p>
+        </section>
+
+        <form id="auth-form" class="auth-form" hidden>
           <label class="auth-form__field">
             <span data-i18n="Username">Username</span>
             <input id="auth-username" name="username" type="text" autocomplete="username" minlength="3" maxlength="24" required>
@@ -136,6 +167,8 @@
     </section>
 
     <section id="app-shell" class="map-shell" aria-labelledby="map-title" hidden>
+      <p class="demo-guide" data-i18n="Demo tip: open Briarport to explore its harbor map, or select Captain Mira to meet your guide.">Demo tip: open Briarport to explore its harbor map, or select Captain Mira to meet your guide.</p>
+      <p class="user-center__hint" data-i18n="Demo uploads stay on this device (up to 2 MB each). Reset Demo restores the original world.">Demo uploads stay on this device (up to 2 MB each). Reset Demo restores the original world.</p>
       <section id="root-map-setup" class="root-map-setup" hidden>
         <h2 data-i18n="Map Not Ready">Map Not Ready</h2>
         <p data-i18n="Your DM has not set a starting map for this campaign yet. Please check back later.">Your DM has not set a starting map for this campaign yet. Please check back later.</p>
@@ -159,28 +192,10 @@
 
         <div class="map-layout">
           <div class="map-stage" id="map-stage">
-            <img src="assets/images/Map%20-%20Barovia.jpg" alt="Illustrated map of Barovia" class="barovia-map" id="barovia-map">
-            <button type="button" class="map-marker map-marker--location" style="left: 92.81%; top: 52.9%;" data-map-id="barovia" data-location-id="gates-of-barovia-east" data-location-name="巴洛维亚大门" data-location-src="content/locations/gates-of-barovia-east.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for the Eastern Gates of Barovia"></button>
-            <button type="button" class="map-marker map-marker--information" style="left: 91.78%; top: 57.3%;" data-map-id="barovia" data-location-id="roadside-corpse" data-location-name="路边的死尸" data-location-src="content/locations/roadside-corpse.html" data-location-type="information" aria-controls="location-panel" aria-label="Open details for 路边的死尸"></button>
-            <button type="button" class="map-marker map-marker--location" style="left: 90.44%; top: 56.3%;" data-map-id="barovia" data-location-id="fortunetellers-tent" data-location-name="占卜师的帐篷" data-location-src="content/locations/fortunetellers-tent.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 占卜师的帐篷"></button>
-            <button type="button" class="map-marker map-marker--location" style="left: 78.95%; top: 61.6%;" data-map-id="barovia" data-location-id="village-of-barovia" data-location-name="巴洛维亚村" data-location-type="location" data-map-src="assets/images/Map%20-%20Village%20of%20Barovia.jpg" data-map-alt="Map of the Village of Barovia" data-target-map-id="village-of-barovia" data-target-map-title="Village of Barovia" aria-label="Show the Village of Barovia map"></button>
-            <button type="button" class="map-marker map-marker--location" style="left: 48.57%; top: 61.33%;" data-map-id="village-of-barovia" data-location-id="bildraths-mercantile" data-location-name="比尔德拉斯商行" data-location-src="content/locations/bildraths-mercantile.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 比尔德拉斯商行"></button>
-            <button type="button" class="map-marker map-marker--location" style="left: 49.42%; top: 48.42%;" data-map-id="village-of-barovia" data-location-id="blood-on-the-vine-tavern" data-location-name="葡萄藤之血酒馆" data-location-src="content/locations/blood-on-the-vine-tavern.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 葡萄藤之血酒馆"></button>
-            <button type="button" class="map-marker map-marker--location" style="left: 44.02%; top: 66.67%;" data-map-id="village-of-barovia" data-location-id="mad-marys-townhouse" data-location-name="疯玛丽的连排屋" data-location-src="content/locations/mad-marys-townhouse.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 疯玛丽的连排屋"></button>
-            <button type="button" class="map-marker map-marker--location" style="left: 41.59%; top: 89.00%;" data-map-id="village-of-barovia" data-location-id="burgomasters-mansion" data-location-name="村长宅邸" data-location-src="content/locations/burgomasters-mansion.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 村长宅邸"></button>
-            <button type="button" class="map-marker map-marker--location" style="left: 34.81%; top: 56.00%;" data-map-id="village-of-barovia" data-location-id="dream-pastries" data-location-name="梦幻糕饼" data-location-src="content/locations/dream-pastries.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 梦幻糕饼"></button>
-            <button type="button" class="map-marker map-marker--location" style="left: 26.88%; top: 29.58%;" data-map-id="village-of-barovia" data-location-id="church" data-location-name="教堂" data-location-src="content/locations/church.html" data-location-type="location" aria-controls="location-panel" aria-label="Open details for 教堂"></button>
+            <img alt="The Lantern Coast" class="barovia-map" id="barovia-map">
           </div>
 
-          <aside id="portrait-rail" class="portrait-rail" aria-label="Character portraits" hidden data-i18n-aria-label="Character portraits">
-            <button type="button" class="portrait-marker portrait-marker--strahd" data-map-id="barovia" data-location-id="strahd-portrait" data-location-name="Strahd•Von•Zarovich" data-location-type="portrait" data-image-src="assets/images/Count%20Strahd%20von%20Zarovich.jpg" data-image-alt="Portrait of Strahd•Von•Zarovich" data-location-src="content/characters/strahd.html" aria-controls="location-panel" aria-label="Show portrait of Strahd•Von•Zarovich"><img src="assets/images/Count%20Strahd%20von%20Zarovich.jpg" alt="Strahd•Von•Zarovich"><span>Strahd•Von•Zarovich</span></button>
-            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="donavich-portrait" data-location-name="Donavich" data-location-type="portrait" data-image-src="assets/images/Donavich.jpg" data-image-alt="Portrait of Donavich" data-location-src="content/characters/donavich.html" aria-controls="location-panel" aria-label="Show portrait of Donavich"><img src="assets/images/Donavich.jpg" alt="Donavich"><span>Donavich</span></button>
-            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="doru-portrait" data-location-name="Doru" data-location-type="portrait" data-image-src="assets/images/Doru.jpg" data-image-alt="Portrait of Doru" data-location-src="content/characters/doru.html" aria-controls="location-panel" aria-label="Show portrait of Doru"><img src="assets/images/Doru.jpg" alt="Doru"><span>Doru</span></button>
-            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="ireena-kolyana-portrait" data-location-name="Ireena Kolyana" data-location-type="portrait" data-image-src="assets/images/Ireena%20Kolyana.jpg" data-image-alt="Portrait of Ireena Kolyana" data-location-src="content/characters/ireena-kolyana.html" aria-controls="location-panel" aria-label="Show portrait of Ireena Kolyana"><img src="assets/images/Ireena%20Kolyana.jpg" alt="Ireena Kolyana"><span>Ireena Kolyana</span></button>
-            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="ismark-the-lesser-portrait" data-location-name="Ismark-the-Lesser" data-location-type="portrait" data-image-src="assets/images/Ismark-the-Lesser.jpg" data-image-alt="Portrait of Ismark-the-Lesser" data-location-src="content/characters/ismark-the-lesser.html" aria-controls="location-panel" aria-label="Show portrait of Ismark-the-Lesser"><img src="assets/images/Ismark-the-Lesser.jpg" alt="Ismark-the-Lesser"><span>Ismark-the-Lesser</span></button>
-            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="mad-mary-portrait" data-location-name="Mad Mary" data-location-type="portrait" data-image-src="assets/images/Mad%20Mary.jpg" data-image-alt="Portrait of Mad Mary" data-location-src="content/characters/mad-mary.html" aria-controls="location-panel" aria-label="Show portrait of Mad Mary"><img src="assets/images/Mad%20Mary.jpg" alt="Mad Mary"><span>Mad Mary</span></button>
-            <button type="button" class="portrait-marker" data-map-id="village-of-barovia" data-location-id="parriwimple-portrait" data-location-name="Parriwimple" data-location-type="portrait" data-image-src="assets/images/parriwimple.jpg" data-image-alt="Portrait of Parriwimple" data-location-src="content/characters/parriwimple.html" aria-controls="location-panel" aria-label="Show portrait of Parriwimple"><img src="assets/images/parriwimple.jpg" alt="Parriwimple"><span>Parriwimple</span></button>
-          </aside>
+          <aside id="portrait-rail" class="portrait-rail" aria-label="Character portraits" hidden data-i18n-aria-label="Character portraits"></aside>
         </div>
       </div>
     </section>
